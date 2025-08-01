@@ -1,0 +1,61 @@
+<%=
+    # Generate a banner comment for section using PowerShell EPS
+    $len = 37
+    $label = " $($domainPrefix.ToUpper()) "
+    $hashes = "#" * [Math]::Max(0, $len - $label.Length)
+    $left = [Math]::Floor($hashes.Length / 2)
+    $right = $hashes.Length - $left
+    $banner = ("#" * $len) + "`n" + ("#" * $left) + $label + ("#" * $right) + "`n" + ("#" * $len)
+    $banner
+=%>
+server {
+    listen 80;
+    server_name <%= $fqdn %>;
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+
+    location ^~ /.well-known/ {
+        alias <%= $CERT_HOME %>/.well-known/<%= $domainPrefix %>/.well-known/;
+        autoindex on;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name <%= $fqdn %>;
+
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:MozSSL:10m;  # about 40000 sessions
+    ssl_session_tickets off;
+
+    # curl https://ssl-config.mozilla.org/ffdhe2048.txt > /path/to/dhparam
+    ssl_dhparam <%= $CERT_HOME %>/ffdhe2048.txt;
+
+    # intermediate configuration
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-CHACHA20-POLY1305;
+    ssl_prefer_server_ciphers off;
+
+    # HSTS (ngx_http_headers_module is required) (63072000 seconds)
+    add_header Strict-Transport-Security "max-age=63072000" always;
+        
+    ssl_certificate       <%= $CERT_HOME %>/certs/<%= $fqdn %>-chain.pem;
+    ssl_certificate_key   <%= $CERT_HOME %>/certs/<%= $fqdn %>-key.pem;
+
+    location / {
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_pass http://127.0.0.1:<%= $port %>;
+
+        add_header Content-Security-Policy "frame-src *; frame-ancestors *; object-src *;";
+        add_header Access-Control-Allow-Origin 'http://127.0.0.1:<%= $port %>'; 
+        add_header Access-Control-Allow-Credentials true;
+    }
+}

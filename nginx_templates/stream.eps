@@ -1,0 +1,18 @@
+<%=
+    # Generate a banner comment for section using PowerShell EPS
+    $len = 37
+    $label = " $($domainPrefix.ToUpper()) "
+    $hashes = "#" * [Math]::Max(0, $len - $label.Length)
+    $left = [Math]::Floor($hashes.Length / 2)
+    $right = $hashes.Length - $left
+    $banner = ("#" * $len) + "`n" + ("#" * $left) + $label + ("#" * $right) + "`n" + ("#" * $len)
+    $banner
+=%>
+
+server {
+    listen 812;
+
+    proxy_connect_timeout 60s;
+    proxy_socket_keepalive on;
+    proxy_pass localhost:<%= $port %>;
+}
