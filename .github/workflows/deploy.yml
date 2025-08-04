@@ -51,6 +51,7 @@ jobs:
       PGDATABASE: ${{ needs.prepare-postgres.outputs.NEWDATABASE }}
     outputs:
       exitcode: ${{ steps.plan.outputs.exitcode }}
+      HAS_DOCKER_COMPOSE: ${{ steps.check-docker-compose.outputs.HAS_DOCKER_COMPOSE }}
     steps:
       - name: Expose github environment as shell variables
         env:
@@ -100,6 +101,15 @@ jobs:
           name: tfplan
           path: tfplan
 
+      - name: Check for docker-compose.yml
+        id: check-docker-compose
+        run: |
+          if [ ! -f "docker-compose.yml" ]; then
+            echo "HAS_DOCKER_COMPOSE=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "HAS_DOCKER_COMPOSE=true" >> $GITHUB_OUTPUT
+
   terraform-apply:
     runs-on: ubuntu-latest
     env:
@@ -137,7 +147,7 @@ jobs:
 
   deploy:
     runs-on: hetzner2
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && needs.terraform-apply.outputs.HAS_DOCKER_COMPOSE == 'true' }}
     needs: [prepare-postgres, terraform-plan, terraform-apply]
     steps:
       - name: fail if any previous step failed
