@@ -16,7 +16,8 @@ jobs:
   prepare-postgres:
     runs-on: ubuntu-latest
     outputs:
-      NEWDATABASE: ${{ steps.ensure-db.outputs.NEWDATABASE }}
+      DATABASE_NAME: ${{ steps.ensure-db.outputs.DATABASE_NAME }}
+      PROJECT_NAME: ${{ steps.ensure-db.outputs.PROJECT_NAME }}
     steps: 
       - name: Ensure database exists
         id: ensure-db
@@ -28,27 +29,29 @@ jobs:
            PGDATABASE: "postgres"
         run: |
           REPO_NAME="$(basename "$GITHUB_REPOSITORY")"
-          NEWDATABASE="$(echo "$REPO_NAME" | sed 's/-by-vincent//' | tr '-' '.')"
-          echo "NEWDATABASE=$NEWDATABASE" >> $GITHUB_OUTPUT
+          DATABASE_NAME="$(echo "$REPO_NAME" | sed 's/-by-vincent//' | tr '-' '.')"
+          echo "DATABASE_NAME=$DATABASE_NAME" >> $GITHUB_OUTPUT
+          PROJECT_NAME="$(echo "$REPO_NAME" | sed 's/-by-vincent//')"
+          echo "PROJECT_NAME=$PROJECT_NAME" >> $GITHUB_OUTPUT
 
-          exists="$(psql -tAc "SELECT 1 FROM pg_database WHERE datname = '$NEWDATABASE'")"
+          exists="$(psql -tAc "SELECT 1 FROM pg_database WHERE datname = '$DATABASE_NAME'")"
           if [ "$exists" = "1" ]; then
-            echo "Database '$NEWDATABASE' already exists."
+            echo "Database '$DATABASE_NAME' already exists."
             exit 0
           fi
 
-          result=$(createdb "$NEWDATABASE")
+          result=$(createdb "$DATABASE_NAME")
           if [ $? -ne 0 ]; then
-            echo "Failed to create database '$NEWDATABASE'."
+            echo "Failed to create database '$DATABASE_NAME'."
             exit 1
           fi
-          echo "Database '$NEWDATABASE' created."
+          echo "Database '$DATABASE_NAME' created."
 
   terraform-plan:
     needs: prepare-postgres
     runs-on: ubuntu-latest
     env:
-      PGDATABASE: ${{ needs.prepare-postgres.outputs.NEWDATABASE }}
+      PGDATABASE: ${{ needs.prepare-postgres.outputs.DATABASE_NAME }}
     outputs:
       exitcode: ${{ steps.plan.outputs.exitcode }}
       HAS_DOCKER_COMPOSE: ${{ steps.check-docker-compose.outputs.HAS_DOCKER_COMPOSE }}
@@ -113,7 +116,7 @@ jobs:
   terraform-apply:
     runs-on: ubuntu-latest
     env:
-      PGDATABASE: ${{ needs.prepare-postgres.outputs.NEWDATABASE }}
+      PGDATABASE: ${{ needs.prepare-postgres.outputs.DATABASE_NAME }}
     environment: production
     needs: [prepare-postgres, terraform-plan]
     if: needs.terraform-plan.outputs.exitcode == 2
@@ -187,7 +190,7 @@ jobs:
 
       - name: Run Docker Compose
         env:
-          COMPOSE_PROJECT_NAME: ${{ needs.prepare-postgres.outputs.NEWDATABASE }}
+          COMPOSE_PROJECT_NAME: ${{ needs.prepare-postgres.outputs.PROJECT_NAME }}
         run: docker compose up -d
         working-directory: src
 
