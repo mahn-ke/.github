@@ -147,7 +147,7 @@ jobs:
 
   deploy:
     runs-on: hetzner2
-    if: ${{ !cancelled() && needs.terraform-apply.outputs.HAS_DOCKER_COMPOSE == 'true' }}
+    if: ${{ !cancelled() && needs.terraform-plan.outputs.HAS_DOCKER_COMPOSE == 'true' }}
     needs: [prepare-postgres, terraform-plan, terraform-apply]
     steps:
       - name: fail if any previous step failed
