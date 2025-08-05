@@ -183,7 +183,7 @@ jobs:
 
       - run: terraform apply -auto-approve tfplan
 
-deploy:
+  deploy:
     runs-on: hetzner2
     if: ${{ !cancelled() && needs.terraform-plan.outputs.HAS_DOCKER_COMPOSE == 'true' }}
     needs: [build, prepare-postgres, terraform-plan, terraform-apply]
