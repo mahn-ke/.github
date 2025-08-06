@@ -96,7 +96,7 @@ jobs:
       exitcode: ${{ steps.plan.outputs.exitcode }}
       HAS_DOCKER_COMPOSE: ${{ steps.check-docker-compose.outputs.HAS_DOCKER_COMPOSE }}
     steps:
-      - name: Expose github environment as shell variables
+      - name: Expose GitHub environment as shell variables
         env:
           SECRETS_CONTEXT: ${{ toJson(secrets) }}
         run: |
@@ -130,10 +130,10 @@ jobs:
         id: plan
         continue-on-error: true
         run: | 
-          terraform plan --out=tfplan-infrastructure --detailed-exitcode
+          terraform plan --out=tfplan --detailed-exitcode
         working-directory: infrastructure
 
-      - name: Check if terraform apply is required
+      - name: Check if Terraform apply is required
         run: |
           echo "exitcode: ${{ steps.plan.outputs.exitcode }}"
           if [ "${{ steps.plan.outputs.exitcode }}" == "0" ]; then
@@ -154,8 +154,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tfplan-infrastructure
-          path: tfplan-infrastructure
-        working-directory: infrastructure
+          path: infrastructure/tfplan
 
       - name: Check for docker-compose.yml
         id: check-docker-compose
@@ -174,7 +173,7 @@ jobs:
     needs: [prepare-postgres, infrastructure-terraform-plan]
     if: needs.infrastructure-terraform-plan.outputs.exitcode == 2
     steps:
-      - name: Expose github environment as shell variables
+      - name: Expose GitHub environment as shell variables
         env:
           SECRETS_CONTEXT: ${{ toJson(secrets) }}
         run: |
@@ -199,9 +198,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: tfplan-infrastructure
-        working-directory: infrastructure
+          path: infrastructure
 
-      - run: terraform apply -auto-approve tfplan-infrastructure
+      - run: terraform apply -auto-approve tfplan
         working-directory: infrastructure
 
   deploy:
@@ -213,7 +212,7 @@ jobs:
         if: needs.prepare-postgres.result == 'failure' || needs.infrastructure-terraform-plan.result == 'failure' || needs.infrastructure-terraform-apply.result == 'failure'
         run: exit 1
 
-      - name: Expose github environment as shell variables
+      - name: Expose GitHub environment as shell variables
         env:
           SECRETS_CONTEXT: ${{ toJson(secrets) }}
         run: |
@@ -250,7 +249,7 @@ jobs:
         run: docker compose up -d --pull always
         working-directory: src
 
-      - name: Attempt subomain deployment, if required
+      - name: Attempt subdomain deployment, if required
         run: ../workflow/tools/Deploy.ps1
         shell: pwsh
         working-directory: src
@@ -264,7 +263,7 @@ jobs:
       exitcode: ${{ steps.plan.outputs.exitcode }}
       HAS_DOCKER_COMPOSE: ${{ steps.check-docker-compose.outputs.HAS_DOCKER_COMPOSE }}
     steps:
-      - name: Expose github environment as shell variables
+      - name: Expose GitHub environment as shell variables
         env:
           SECRETS_CONTEXT: ${{ toJson(secrets) }}
         run: |
@@ -300,7 +299,7 @@ jobs:
           terraform plan --out=tfplan-service --detailed-exitcode
         working-directory: service
 
-      - name: Check if terraform apply is required
+      - name: Check if Terraform apply is required
         run: |
           echo "exitcode: ${{ steps.plan.outputs.exitcode }}"
           if [ "${{ steps.plan.outputs.exitcode }}" == "0" ]; then
@@ -321,8 +320,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tfplan-service
-          path: tfplan-service
-        working-directory: service
+          path: service/tfplan
 
   service-terraform-apply:
     runs-on: ubuntu-latest
@@ -332,7 +330,7 @@ jobs:
     needs: [prepare-postgres, service-terraform-plan, deploy]
     if: needs.service-terraform-plan.outputs.exitcode == 2
     steps:
-      - name: Expose github environment as shell variables
+      - name: Expose GitHub environment as shell variables
         env:
           SECRETS_CONTEXT: ${{ toJson(secrets) }}
         run: |
@@ -357,7 +355,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: tfplan-service
-        working-directory: service
+          path: service
 
-      - run: terraform apply -auto-approve tfplan-service
+      - run: terraform apply -auto-approve tfplan
         working-directory: service
