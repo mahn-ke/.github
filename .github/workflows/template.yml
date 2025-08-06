@@ -72,24 +72,26 @@ jobs:
           PROJECT_NAME="$(echo "$REPO_NAME" | sed 's/-by-vincent//')"
           echo "PROJECT_NAME=$PROJECT_NAME" >> $GITHUB_OUTPUT
 
-          exists="$(psql -tAc "SELECT 1 FROM pg_database WHERE datname = '$DATABASE_NAME'")"
-          if [ "$exists" = "1" ]; then
-            echo "Database '$DATABASE_NAME' already exists."
-            exit 0
-          fi
+          for suffix in infrastructure service; do
+            db="${DATABASE_NAME}-$suffix"
+            exists="$(psql -tAc "SELECT 1 FROM pg_database WHERE datname = '$db'")"
+            if [ "$exists" = "1" ]; then
+              echo "Database '$db' already exists."
+              continue
+            fi
+            createdb "$db"
+            if [ $? -ne 0 ]; then
+              echo "Failed to create database '$db'."
+              exit 1
+            fi
+            echo "Database '$db' created."
+          done
 
-          result=$(createdb "$DATABASE_NAME")
-          if [ $? -ne 0 ]; then
-            echo "Failed to create database '$DATABASE_NAME'."
-            exit 1
-          fi
-          echo "Database '$DATABASE_NAME' created."
-
-  terraform-plan:
+  infrastructure-terraform-plan:
     needs: prepare-postgres
     runs-on: ubuntu-latest
     env:
-      PGDATABASE: ${{ needs.prepare-postgres.outputs.DATABASE_NAME }}
+      PGDATABASE: ${{ needs.prepare-postgres.outputs.DATABASE_NAME }}-infrastructure
     outputs:
       exitcode: ${{ steps.plan.outputs.exitcode }}
       HAS_DOCKER_COMPOSE: ${{ steps.check-docker-compose.outputs.HAS_DOCKER_COMPOSE }}
@@ -113,12 +115,23 @@ jobs:
       - run: terraform version
 
       - run: terraform init
+        working-directory: infrastructure
+
+      - name: exit if terraform fmt is not clean
+        run: |
+          if ! terraform fmt -check -recursive; then
+            echo "Terraform files are not formatted correctly. Please run 'terraform fmt' to fix them."
+            exit 1
+          fi
+        working-directory: infrastructure
+
 
       - name: terraform plan
         id: plan
         continue-on-error: true
         run: | 
-          terraform plan --out=tfplan --detailed-exitcode
+          terraform plan --out=tfplan-infrastructure --detailed-exitcode
+        working-directory: infrastructure
 
       - name: Check if terraform apply is required
         run: |
@@ -134,13 +147,15 @@ jobs:
           fi
 
           echo "Configuration files found and changes; running apply"
+        working-directory: infrastructure
 
       - name: Upload Terraform plan
         if: steps.plan.outputs.exitcode == 2
         uses: actions/upload-artifact@v4
         with:
-          name: tfplan
-          path: tfplan
+          name: tfplan-infrastructure
+          path: tfplan-infrastructure
+        working-directory: infrastructure
 
       - name: Check for docker-compose.yml
         id: check-docker-compose
@@ -151,13 +166,13 @@ jobs:
           fi
           echo "HAS_DOCKER_COMPOSE=true" >> $GITHUB_OUTPUT
 
-  terraform-apply:
+  infrastructure-terraform-apply:
     runs-on: ubuntu-latest
     env:
-      PGDATABASE: ${{ needs.prepare-postgres.outputs.DATABASE_NAME }}
+      PGDATABASE: ${{ needs.prepare-postgres.outputs.DATABASE_NAME }}-infrastructure
     environment: production
-    needs: [prepare-postgres, terraform-plan]
-    if: needs.terraform-plan.outputs.exitcode == 2
+    needs: [prepare-postgres, infrastructure-terraform-plan]
+    if: needs.infrastructure-terraform-plan.outputs.exitcode == 2
     steps:
       - name: Expose github environment as shell variables
         env:
@@ -178,21 +193,24 @@ jobs:
       - run: terraform version
           
       - run: terraform init
+        working-directory: infrastructure
 
       - name: Download Terraform plan
         uses: actions/download-artifact@v4
         with:
-          name: tfplan
+          name: tfplan-infrastructure
+        working-directory: infrastructure
 
-      - run: terraform apply -auto-approve tfplan
+      - run: terraform apply -auto-approve tfplan-infrastructure
+        working-directory: infrastructure
 
   deploy:
     runs-on: hetzner2
-    if: ${{ !cancelled() && needs.terraform-plan.outputs.HAS_DOCKER_COMPOSE == 'true' }}
-    needs: [build, prepare-postgres, terraform-plan, terraform-apply]
+    if: ${{ !cancelled() && needs.infrastructure-terraform-plan.outputs.HAS_DOCKER_COMPOSE == 'true' }}
+    needs: [build, prepare-postgres, infrastructure-terraform-plan, infrastructure-terraform-apply]
     steps:
       - name: fail if any previous step failed
-        if: needs.prepare-postgres.result == 'failure' || needs.terraform-plan.result == 'failure' || needs.terraform-apply.result == 'failure'
+        if: needs.prepare-postgres.result == 'failure' || needs.infrastructure-terraform-plan.result == 'failure' || needs.infrastructure-terraform-apply.result == 'failure'
         run: exit 1
 
       - name: Expose github environment as shell variables
@@ -236,3 +254,110 @@ jobs:
         run: ../workflow/tools/Deploy.ps1
         shell: pwsh
         working-directory: src
+
+  service-terraform-plan:
+    needs: [prepare-postgres, deploy]
+    runs-on: ubuntu-latest
+    env:
+      PGDATABASE: ${{ needs.prepare-postgres.outputs.DATABASE_NAME }}-service
+    outputs:
+      exitcode: ${{ steps.plan.outputs.exitcode }}
+      HAS_DOCKER_COMPOSE: ${{ steps.check-docker-compose.outputs.HAS_DOCKER_COMPOSE }}
+    steps:
+      - name: Expose github environment as shell variables
+        env:
+          SECRETS_CONTEXT: ${{ toJson(secrets) }}
+        run: |
+          # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#setting-an-environment-variable
+          # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#multiline-strings
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          to_envs() { jq -r "to_entries[] | \"\(.key)<<$EOF\n\(.value)\n$EOF\n\""; }
+          echo "$SECRETS_CONTEXT" | to_envs >> $GITHUB_ENV
+          
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - run: terraform version
+
+      - run: terraform init
+        working-directory: service
+
+      - name: exit if terraform fmt is not clean
+        run: |
+          if ! terraform fmt -check -recursive; then
+            echo "Terraform files are not formatted correctly. Please run 'terraform fmt' to fix them."
+            exit 1
+          fi
+        working-directory: service
+
+      - name: terraform plan
+        id: plan
+        continue-on-error: true
+        run: | 
+          terraform plan --out=tfplan-service --detailed-exitcode
+        working-directory: service
+
+      - name: Check if terraform apply is required
+        run: |
+          echo "exitcode: ${{ steps.plan.outputs.exitcode }}"
+          if [ "${{ steps.plan.outputs.exitcode }}" == "0" ]; then
+            echo "Configuration files found but no changes; skipping apply"
+            exit 0
+          fi
+          
+          if grep -q "No configuration files" <<<"${{ steps.plan.outputs.stderr }}"; then
+            echo "No configuration files found; skipping apply"
+            exit 0
+          fi
+
+          echo "Configuration files found and changes; running apply"
+        working-directory: service
+
+      - name: Upload Terraform plan
+        if: steps.plan.outputs.exitcode == 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-service
+          path: tfplan-service
+        working-directory: service
+
+  service-terraform-apply:
+    runs-on: ubuntu-latest
+    env:
+      PGDATABASE: ${{ needs.prepare-postgres.outputs.DATABASE_NAME }}-service
+    environment: production
+    needs: [prepare-postgres, service-terraform-plan, deploy]
+    if: needs.service-terraform-plan.outputs.exitcode == 2
+    steps:
+      - name: Expose github environment as shell variables
+        env:
+          SECRETS_CONTEXT: ${{ toJson(secrets) }}
+        run: |
+          # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#setting-an-environment-variable
+          # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#multiline-strings
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          to_envs() { jq -r "to_entries[] | \"\(.key)<<$EOF\n\(.value)\n$EOF\n\""; }
+          echo "$SECRETS_CONTEXT" | to_envs >> $GITHUB_ENV
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - run: terraform version
+          
+      - run: terraform init
+        working-directory: service
+
+      - name: Download Terraform plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-service
+        working-directory: service
+
+      - run: terraform apply -auto-approve tfplan-service
+        working-directory: service
