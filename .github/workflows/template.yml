@@ -229,7 +229,7 @@ jobs:
       - name: Run Docker Compose
         env:
           COMPOSE_PROJECT_NAME: ${{ needs.prepare-postgres.outputs.PROJECT_NAME }}
-        run: docker compose up -d
+        run: docker compose up -d --pull always
         working-directory: src
 
       - name: Attempt subomain deployment, if required
