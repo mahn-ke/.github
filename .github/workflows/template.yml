@@ -130,7 +130,7 @@ jobs:
         id: plan
         continue-on-error: true
         run: | 
-          terraform plan --out=tfplan --detailed-exitcode
+          terraform plan -input=false --out=tfplan --detailed-exitcode
         working-directory: infrastructure
 
       - name: Check if Terraform apply is required
@@ -200,7 +200,7 @@ jobs:
           name: tfplan-infrastructure
           path: infrastructure
 
-      - run: terraform apply -auto-approve tfplan
+      - run: terraform apply -input=false -auto-approve tfplan
         working-directory: infrastructure
 
   deploy:
@@ -296,7 +296,7 @@ jobs:
         id: plan
         continue-on-error: true
         run: | 
-          terraform plan --out=tfplan-service --detailed-exitcode
+          terraform plan -input=false --out=tfplan-service --detailed-exitcode
         working-directory: service
 
       - name: Check if Terraform apply is required
@@ -357,5 +357,5 @@ jobs:
           name: tfplan-service
           path: service
 
-      - run: terraform apply -auto-approve tfplan
+      - run: terraform apply -input=false -auto-approve tfplan
         working-directory: service
