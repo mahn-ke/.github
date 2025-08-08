@@ -1,0 +1,108 @@
+name: Backup
+
+on:
+  workflow_call:
+  # schedule:
+  #   - cron: '0 0 * * *' # daily at 0:00
+
+jobs:
+  prepare:
+    runs-on: hetzner2
+    env:
+      RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
+    outputs:
+      has-backup: ${{ steps.check-for-backup.outputs.has-backup }}
+    steps:
+      - name: Check RESTIC_ROOT is set
+        run: |
+          if (-not $env:RESTIC_ROOT) {
+            Write-Host "RESTIC_ROOT is not set; set it to the path where restic repositories should be stored"
+            exit 1
+          }
+
+      - name: Check if backup exists
+        id: check-for-backup
+        run: |
+          $REPO_NAME = Split-Path $env:GITHUB_REPOSITORY -Leaf
+          $PROJECT_NAME = $REPO_NAME -replace '-by-vincent', ''
+          $configPath = Join-Path $env:RESTIC_ROOT $PROJECT_NAME 'config'
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "has-backup=false"
+          if (Test-Path $configPath) {
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "has-backup=true"
+          }
+
+  init:
+    runs-on: hetzner2
+    environment: production
+    needs: prepare
+    if: needs.prepare.outputs.has-backup == 'false'
+    env:
+      RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
+    steps:
+      - name: Set environment variables and RESTIC_REPOSITORY
+        run: |
+          $REPO_NAME = Split-Path $env:GITHUB_REPOSITORY -Leaf
+          $PROJECT_NAME = $REPO_NAME -replace '-by-vincent', ''
+          Add-Content -Path $env:GITHUB_ENV -Value "RESTIC_REPOSITORY=$env:RESTIC_ROOT\$PROJECT_NAME"
+        shell: pwsh
+
+      - name: Init restic repository
+        run: |
+          restic init
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        shell: pwsh
+  backup:
+    runs-on: hetzner2
+    needs: prepare
+    if: needs.prepare.outputs.has-backup == 'true'
+    env:
+      RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
+    steps:
+      - name: Set environment variables and RESTIC_REPOSITORY
+        run: |
+          $REPO_NAME = Split-Path $env:GITHUB_REPOSITORY -Leaf
+          $PROJECT_NAME = $REPO_NAME -replace '-by-vincent', ''
+          Add-Content -Path $env:GITHUB_ENV -Value "RESTIC_REPOSITORY=$env:RESTIC_ROOT\$PROJECT_NAME"
+        shell: pwsh
+
+      - run: |
+          restic snapshots
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          
+      - run: |
+          restic check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - run: |
+          Write-Host "Checking for volumes and mounts in docker-compose.yml..."
+          docker compose config | Out-File -FilePath config.yml -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $mappings = docker run --rm -v "${PWD}:/workdir" mikefarah/yq ".services[].volumes[].source" config.yml
+          $unique_mappings = $mappings | Sort-Object | Get-Unique
+          $volumes = $unique_mappings | Where-Object { $_ -notmatch '[\\/]' }
+          $mounts = $unique_mappings | Where-Object { $_ -match '[\\/]' }
+
+          Write-Host "Volumes to backup:`n$($volumes -join "`n")"
+          Write-Host "Mounts to backup:`n$($mounts -join "`n")"
+
+          foreach ($volume in $volumes) {
+            $backup_dir = "backup_$volume"
+            Write-Host "Extracting volume '$volume' to '$backup_dir'"
+            New-Item -ItemType Directory -Path $backup_dir | Out-Null
+            docker run --rm -v "$volume:/src" -v "$PWD\$backup_dir:/dest" alpine sh -c 'cp -R /src/* /dest/'
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Write-Host "Backing up using restic from '$backup_dir'"
+            restic backup "$backup_dir" --skip-if-unchanged
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+          foreach ($mount in $mounts) {
+            Write-Host "Backing up mount '$mount':"
+            restic backup "$mount" --skip-if-unchanged
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+        shell: pwsh
+      - run: |
+          restic forget --keep-daily 1 --keep-weekly 7 --keep-monthly 4 --keep-yearly 12 --prune
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
