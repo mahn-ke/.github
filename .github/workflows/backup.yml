@@ -76,6 +76,10 @@ jobs:
       - run: |
           restic check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - run: |
           Write-Host "Checking for volumes and mounts in docker-compose.yml..."
           docker compose config | Out-File -FilePath config.yml -Encoding utf8
@@ -93,7 +97,7 @@ jobs:
             $backup_dir = "backup_$volume"
             Write-Host "Extracting volume '$volume' to '$backup_dir'"
             New-Item -ItemType Directory -Path $backup_dir | Out-Null
-            docker run --rm -v "$volume:/src" -v "$PWD\$backup_dir:/dest" alpine sh -c 'cp -R /src/* /dest/'
+            docker run --rm -v "$($volume):/src" -v "$PWD\$($backup_dir):/dest" alpine sh -c 'cp -R /src/* /dest/'
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             Write-Host "Backing up using restic from '$backup_dir'"
             restic backup "$backup_dir" --skip-if-unchanged
@@ -106,6 +110,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
         shell: pwsh
+        
       - run: |
           restic forget --keep-daily 1 --keep-weekly 7 --keep-monthly 4 --keep-yearly 12 --prune
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
