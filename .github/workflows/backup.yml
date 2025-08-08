@@ -1,9 +1,13 @@
+# Required environment variables:
+# - RESTIC_ROOT:  Directory where restic repositories should be stored
+#
+# Required binaries/tools:
+# - restic (https://restic.net/)
+
 name: Backup
 
 on:
   workflow_call:
-  # schedule:
-  #   - cron: '0 0 * * *' # daily at 0:00
 
 jobs:
   prepare:
