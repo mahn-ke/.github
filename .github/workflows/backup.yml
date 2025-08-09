@@ -95,13 +95,13 @@ jobs:
           Write-Host "Mounts to backup:`n$($mounts -join "`n")"
 
           foreach ($volume in $volumes) {
-            $backup_dir = "backup_$volume"
-            Write-Host "Extracting volume '$volume' to '$backup_dir'"
-            New-Item -ItemType Directory -Path $backup_dir | Out-Null
-            docker run --rm -v "$($env:PROJECT_NAME)_$($volume):/src" -v "$PWD\$($backup_dir):/dest" alpine sh -c 'cp -R /src/* /dest/'
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            Write-Host "Backing up using restic from '$backup_dir'"
-            restic backup "$backup_dir" --skip-if-unchanged
+            Write-Host "Backing up volume '$volume' directly using restic container"
+            docker run `
+              -e RESTIC_PASSWORD="$($env:RESTIC_PASSWORD)" `
+              -e RESTIC_REPOSITORY="/repo" `
+              -v "$($env:RESTIC_ROOT)/$($env:PROJECT_NAME):/repo" `
+              -v "$($env:PROJECT_NAME)_$($volume):/$($volume):ro" `
+              restic/restic backup /$($volume) --skip-if-unchanged --host "$($env:COMPUTERNAME)"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 
