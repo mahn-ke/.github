@@ -119,7 +119,12 @@ jobs:
           }
 
           foreach ($mount in $mounts) {
-            if ($mount -eq '/var/run/docker.sock') {
+            $skiplist = @(
+              '/var/run/docker.sock', 
+              '/etc/localtime',
+              '/run/dbus'
+            )
+            if ($skiplist -contains $mount) {
               Write-Host "Skipping backup of mount '$mount'"
               continue
             }
