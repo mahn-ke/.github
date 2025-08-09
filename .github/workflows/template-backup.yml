@@ -25,6 +25,9 @@ jobs:
             exit 1
           }
 
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Check if docker-compose.yml exists
         id: has-docker-compose
         run: |
