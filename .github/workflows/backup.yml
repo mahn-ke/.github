@@ -67,6 +67,7 @@ jobs:
           $REPO_NAME = Split-Path $env:GITHUB_REPOSITORY -Leaf
           $PROJECT_NAME = $REPO_NAME -replace '-by-vincent', ''
           Add-Content -Path $env:GITHUB_ENV -Value "RESTIC_REPOSITORY=$env:RESTIC_ROOT\$PROJECT_NAME"
+          Add-Content -Path $env:GITHUB_ENV -Value "PROJECT_NAME=$PROJECT_NAME"
         shell: pwsh
 
       - run: |
@@ -97,7 +98,7 @@ jobs:
             $backup_dir = "backup_$volume"
             Write-Host "Extracting volume '$volume' to '$backup_dir'"
             New-Item -ItemType Directory -Path $backup_dir | Out-Null
-            docker run --rm -v "$($volume):/src" -v "$PWD\$($backup_dir):/dest" alpine sh -c 'cp -R /src/* /dest/'
+            docker run --rm -v "$($env:PROJECT_NAME)_$($volume):/src" -v "$PWD\$($backup_dir):/dest" alpine sh -c 'cp -R /src/* /dest/'
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             Write-Host "Backing up using restic from '$backup_dir'"
             restic backup "$backup_dir" --skip-if-unchanged
@@ -110,7 +111,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
         shell: pwsh
-        
+
       - run: |
           restic forget --keep-daily 1 --keep-weekly 7 --keep-monthly 4 --keep-yearly 12 --prune
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
