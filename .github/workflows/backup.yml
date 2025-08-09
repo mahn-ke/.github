@@ -1,118 +1,15 @@
-# Required environment variables:
-# - RESTIC_ROOT:  Directory where restic repositories should be stored
-#
-# Required binaries/tools:
-# - restic (https://restic.net/)
-
-name: Backup
+name: Backup volumes from docker-compose.yml
 
 on:
-  workflow_call:
+  schedule:
+    - cron: '0 0 * * *' # daily at 0:00
+  workflow_dispatch:
+
+concurrency:
+  group: backup-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  prepare:
-    runs-on: hetzner2
-    env:
-      RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
-    outputs:
-      has-backup: ${{ steps.check-for-backup.outputs.has-backup }}
-    steps:
-      - name: Check RESTIC_ROOT is set
-        run: |
-          if (-not $env:RESTIC_ROOT) {
-            Write-Host "RESTIC_ROOT is not set; set it to the path where restic repositories should be stored"
-            exit 1
-          }
-
-      - name: Check if backup exists
-        id: check-for-backup
-        run: |
-          $REPO_NAME = Split-Path $env:GITHUB_REPOSITORY -Leaf
-          $PROJECT_NAME = $REPO_NAME -replace '-by-vincent', ''
-          $configPath = Join-Path $env:RESTIC_ROOT $PROJECT_NAME 'config'
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "has-backup=false"
-          if (Test-Path $configPath) {
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "has-backup=true"
-          }
-
-  init:
-    runs-on: hetzner2
-    environment: production
-    needs: prepare
-    if: needs.prepare.outputs.has-backup == 'false'
-    env:
-      RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
-    steps:
-      - name: Set environment variables and RESTIC_REPOSITORY
-        run: |
-          $REPO_NAME = Split-Path $env:GITHUB_REPOSITORY -Leaf
-          $PROJECT_NAME = $REPO_NAME -replace '-by-vincent', ''
-          Add-Content -Path $env:GITHUB_ENV -Value "RESTIC_REPOSITORY=$env:RESTIC_ROOT\$PROJECT_NAME"
-        shell: pwsh
-
-      - name: Init restic repository
-        run: |
-          restic init
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        shell: pwsh
   backup:
-    runs-on: hetzner2
-    needs: prepare
-    if: needs.prepare.outputs.has-backup == 'true'
-    env:
-      RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
-    steps:
-      - name: Set environment variables and RESTIC_REPOSITORY
-        run: |
-          $REPO_NAME = Split-Path $env:GITHUB_REPOSITORY -Leaf
-          $PROJECT_NAME = $REPO_NAME -replace '-by-vincent', ''
-          Add-Content -Path $env:GITHUB_ENV -Value "RESTIC_REPOSITORY=$env:RESTIC_ROOT\$PROJECT_NAME"
-          Add-Content -Path $env:GITHUB_ENV -Value "PROJECT_NAME=$PROJECT_NAME"
-        shell: pwsh
-
-      - run: |
-          restic snapshots
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          
-      - run: |
-          restic check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - run: |
-          Write-Host "Checking for volumes and mounts in docker-compose.yml..."
-          docker compose config | Out-File -FilePath config.yml -Encoding utf8
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-          $mappings = docker run --rm -v "${PWD}:/workdir" mikefarah/yq ".services[].volumes[].source" config.yml
-          $unique_mappings = $mappings | Sort-Object | Get-Unique
-          $volumes = $unique_mappings | Where-Object { $_ -notmatch '[\\/]' }
-          $mounts = $unique_mappings | Where-Object { $_ -match '[\\/]' }
-
-          Write-Host "Volumes to backup:`n$($volumes -join "`n")"
-          Write-Host "Mounts to backup:`n$($mounts -join "`n")"
-
-          foreach ($volume in $volumes) {
-            Write-Host "Backing up volume '$volume' directly using restic container"
-            docker run `
-              -e RESTIC_PASSWORD="$($env:RESTIC_PASSWORD)" `
-              -e RESTIC_REPOSITORY="/repo" `
-              -v "$($env:RESTIC_ROOT)/$($env:PROJECT_NAME):/repo" `
-              -v "$($env:PROJECT_NAME)_$($volume):/$($volume):ro" `
-              restic/restic backup /$($volume) --skip-if-unchanged --host "$($env:COMPUTERNAME)"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
-
-          foreach ($mount in $mounts) {
-            Write-Host "Backing up mount '$mount':"
-            restic backup "$mount" --skip-if-unchanged
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
-        shell: pwsh
-
-      - run: |
-          restic forget --keep-daily 1 --keep-weekly 7 --keep-monthly 4 --keep-yearly 12 --prune
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
+    uses: mahn-ke/.github/.github/workflows/backup.yml@main
+    secrets: inherit
