@@ -119,6 +119,10 @@ jobs:
           }
 
           foreach ($mount in $mounts) {
+            if ($mount -eq '/var/run/docker.sock') {
+              Write-Host "Skipping backup of mount '$mount'"
+              continue
+            }
             Write-Host "Backing up mount '$mount':"
             restic backup "$mount" --skip-if-unchanged
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
