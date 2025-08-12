@@ -102,8 +102,8 @@ Invoke-ToolScript "../workflow/tools/New-NginxConfig.ps1" -type $firstPortInfo.t
 # Step 2: Try to apply NGINX configuration
 Invoke-ToolScript "../workflow/tools/Update-NginxConfig.ps1" -type $firstPortInfo.type
 
-if ($firstPortInfo.type -ne 'http') {
-    Write-Host "Port type is not 'http'; skipping HTTPS configuration."
+if ($firstPortInfo.type -ne 'http' -and $firstPortInfo.type -ne 'matrix') {
+    Write-Host "Port type is not 'http' or 'matrix'; skipping HTTPS configuration."
     Write-Host "Deployment completed successfully."
     exit 0
 }
@@ -113,13 +113,15 @@ if (-not [System.Environment]::GetEnvironmentVariable("CERT_HOME")) {
     exit 1
 }
 
+$secondConfig = $firstPortInfo.type + '_ssl'
+
 # Step 3: Generate SSL certificates
 Invoke-ToolScript "../workflow/tools/New-Certificate.ps1"
 
 # Step 4: Generate HTTP+HTTPS NGINX configuration
-Invoke-ToolScript "../workflow/tools/New-NginxConfig.ps1" -type "https" -port $firstPortInfo.port
+Invoke-ToolScript "../workflow/tools/New-NginxConfig.ps1" -type $secondConfig -port $firstPortInfo.port
 
 # Step 5: Try to apply HTTP+HTTPS NGINX configuration
-Invoke-ToolScript "../workflow/tools/Update-NginxConfig.ps1" -type "https"
+Invoke-ToolScript "../workflow/tools/Update-NginxConfig.ps1" -type $secondConfig
 
 Write-Host "Deployment completed successfully."
