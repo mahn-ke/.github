@@ -86,14 +86,14 @@ function Invoke-ToolScript {
     $proc = Start-Process -FilePath "pwsh" -ArgumentList @("-File"; $ScriptPath; $Arguments) -Wait -PassThru -NoNewWindow -RedirectStandardOutput "stdout.log" -RedirectStandardError "stderr.log"
     $exitCode = $proc.ExitCode
     if ($exitCode -ne 0) {
-        Write-Host "$ScriptPath failed with exit code $exitCode."
+        Write-Host "$ScriptPath $Arguments failed with exit code $exitCode."
         Write-Host "---- stdout.log ----"
         Get-Content "stdout.log" | Write-Host
         Write-Host "---- stderr.log ----"
         Get-Content "stderr.log" | Write-Host
         exit $exitCode
     }
-    Write-Host "$ScriptPath executed successfully."
+    Write-Host "$ScriptPath $Arguments executed successfully."
     Write-Host "---- stdout.log ----"
     Get-Content "stdout.log" | Write-Host
     Write-Host "---- stderr.log ----"
