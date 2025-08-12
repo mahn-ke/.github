@@ -21,7 +21,7 @@ $nginxConf = "$env:NGINX_HOME\conf"
 $backupDir = "$nginxConf-backup"
 $output = "$(Get-Location)\output"
 $destination = "$nginxConf\$type"
-if ($type -eq "https") {
+if ($type -like "*_ssl") {
     $destination = "$nginxConf\http"
 }
 
