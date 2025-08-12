@@ -1,0 +1,23 @@
+<%=
+    # Generate a banner comment for section using PowerShell EPS
+    $len = 37
+    $label = " $($domainPrefix.ToUpper()) "
+    $hashes = "#" * [Math]::Max(0, $len - $label.Length)
+    $left = [Math]::Floor($hashes.Length / 2)
+    $right = $hashes.Length - $left
+    $banner = ("#" * $len) + "`n" + ("#" * $left) + $label + ("#" * $right) + "`n" + ("#" * $len)
+    $banner
+=%>
+server {
+    listen 80;
+    server_name <%= $fqdn %>;
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+
+    location ^~ /.well-known/ {
+        alias <%= $CERT_HOME %>/.well-known/<%= $domainPrefix %>/.well-known/;
+        autoindex on;
+    }
+}
