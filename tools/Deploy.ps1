@@ -93,6 +93,11 @@ function Invoke-ToolScript {
         Get-Content "stderr.log" | Write-Host
         exit $exitCode
     }
+    Write-Host "$ScriptPath executed successfully."
+    Write-Host "---- stdout.log ----"
+    Get-Content "stdout.log" | Write-Host
+    Write-Host "---- stderr.log ----"
+    Get-Content "stderr.log" | Write-Host
     Remove-Item "stdout.log","stderr.log" -ErrorAction SilentlyContinue
 }
 
