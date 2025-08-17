@@ -7,7 +7,12 @@
 name: Backup
 
 on:
-  workflow_call:
+   workflow_call:
+    inputs:
+      tags:
+        description: 'add tags for the new snapshot in the format `tag[,tag,...]` (can be specified multiple times) (default [])'
+        required: false
+        type: string
 
 jobs:
   prepare:
@@ -119,7 +124,7 @@ jobs:
               -v "$($env:RESTIC_ROOT)/$($env:PROJECT_NAME):/repo" `
               -v "$($env:PROJECT_NAME)_$($volume):/$($volume):ro" `
               restic/restic `
-              backup /$($volume) --skip-if-unchanged --host "$($env:COMPUTERNAME)"
+              backup /$($volume) --skip-if-unchanged --host "$($env:COMPUTERNAME)" --tag $($env:INPUT_TAGS)
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 
@@ -138,6 +143,8 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
         shell: pwsh
+        environment:
+          INPUT_TAGS: ${{ inputs.tags || '' }}
 
       - run: |
           restic forget --keep-daily 1 --keep-weekly 7 --keep-monthly 4 --keep-yearly 12 --prune
