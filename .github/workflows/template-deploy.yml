@@ -26,8 +26,10 @@ jobs:
         run: |
           if [ -f app/Dockerfile ]; then
             echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Dockerfile found in app directory."
           else
             echo "exists=false" >> $GITHUB_OUTPUT
+            echo "No Dockerfile found in app directory."
           fi
 
       - name: Log in to GitHub Container Registry
