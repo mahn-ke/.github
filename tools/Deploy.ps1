@@ -33,7 +33,7 @@ function Get-FirstHostPort {
         $type = 'http'  # Default type if no comment is found
         Write-Warning "No type specified in the first line of docker-compose.yml, defaulting to 'http'."
     }
-    $yaml = ConvertFrom-Yaml (Get-Content $composeFile -Raw)
+    $yaml = ConvertFrom-Yaml (Get-Content $composeFile -Raw) -Ordered
     if (-not $yaml.services) {
         Write-Error "No 'services' section found in docker-compose.yml"
         exit 1
