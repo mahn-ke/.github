@@ -82,6 +82,7 @@ jobs:
     if: needs.prepare.outputs.has-docker-compose == 'true' && needs.prepare.outputs.has-backup == 'true'
     env:
       RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
+      INPUT_TAGS: ${{ inputs.tags || '' }}
     steps:
       - name: Set environment variables and RESTIC_REPOSITORY
         run: |
@@ -143,8 +144,6 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
         shell: pwsh
-        environment:
-          INPUT_TAGS: ${{ inputs.tags || '' }}
 
       - run: |
           restic forget --keep-daily 1 --keep-weekly 7 --keep-monthly 4 --keep-yearly 12 --prune
