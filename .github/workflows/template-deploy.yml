@@ -44,6 +44,7 @@ jobs:
         if: steps.check_dockerfile.outputs.exists == 'true'
         run: |
           docker build -t ghcr.io/${{ github.repository }}:latest .
+        working-directory: app
 
       - name: Push Docker image
         if: steps.check_dockerfile.outputs.exists == 'true' && github.event_name != 'pull_request'
