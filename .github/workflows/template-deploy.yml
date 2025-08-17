@@ -203,7 +203,7 @@ jobs:
 
   deploy:
     runs-on: hetzner2
-    if: ${{ !cancelled() && needs.infrastructure-terraform-plan.outputs.HAS_DOCKER_COMPOSE == 'true' }}
+    if: ${{ !cancelled() && needs.infrastructure-terraform-plan.outputs.HAS_DOCKER_COMPOSE == 'true' && github.event_name != 'pull_request' }}
     needs: [build, prepare-postgres, infrastructure-terraform-plan, infrastructure-terraform-apply]
     steps:
       - name: fail if any previous step failed
