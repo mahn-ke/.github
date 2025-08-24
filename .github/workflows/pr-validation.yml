@@ -1,0 +1,31 @@
+name: Deploy `http`, `stream` and `direct` service
+
+on:
+  pull_request:
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  this:
+    uses: mahn-ke/.github/.github/workflows/template-deploy.yml@main
+    secrets: inherit
+
+  http:
+    uses: mahn-ke/.github/.github/workflows/template-deploy.yml@main
+    with:
+      repo: ttrss-by-vincent
+    secrets: inherit
+
+  stream:
+    uses: mahn-ke/.github/.github/workflows/template-deploy.yml@main
+    with:
+      repo: matrix-by-vincent
+    secrets: inherit
+
+  direct:
+    uses: mahn-ke/.github/.github/workflows/template-deploy.yml@main
+    with:
+      repo: rustdesk-by-vincent
+    secrets: inherit
