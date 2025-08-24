@@ -18,11 +18,10 @@ on:
         type: string
     secrets: {}
 
-environment:
-  GITHUB_REPOSITORY: ${{ inputs.repository || env.GITHUB_REPOSITORY }}
-
 jobs:
   build:
+    env:
+      GITHUB_REPOSITORY: ${{ inputs.repository || env.GITHUB_REPOSITORY }}
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -67,6 +66,8 @@ jobs:
         working-directory: app
 
   prepare-postgres:
+    env:
+      GITHUB_REPOSITORY: ${{ inputs.repository || env.GITHUB_REPOSITORY }}
     runs-on: ubuntu-latest
     outputs:
       DATABASE_NAME: ${{ steps.ensure-db.outputs.DATABASE_NAME }}
@@ -106,6 +107,7 @@ jobs:
     needs: prepare-postgres
     runs-on: ubuntu-latest
     env:
+      GITHUB_REPOSITORY: ${{ inputs.repository || env.GITHUB_REPOSITORY }}
       PGDATABASE: ${{ needs.prepare-postgres.outputs.DATABASE_NAME }}-infrastructure
     outputs:
       exitcode: ${{ steps.plan.outputs.exitcode }}
@@ -185,6 +187,7 @@ jobs:
   infrastructure-terraform-apply:
     runs-on: ubuntu-latest
     env:
+      GITHUB_REPOSITORY: ${{ inputs.repository || env.GITHUB_REPOSITORY }}
       PGDATABASE: ${{ needs.prepare-postgres.outputs.DATABASE_NAME }}-infrastructure
     environment: production
     needs: [prepare-postgres, infrastructure-terraform-plan]
@@ -223,6 +226,8 @@ jobs:
         working-directory: infrastructure
 
   deploy:
+    env:
+      GITHUB_REPOSITORY: ${{ inputs.repository || env.GITHUB_REPOSITORY }}
     runs-on: hetzner2
     if: ${{ !cancelled() && needs.infrastructure-terraform-plan.outputs.HAS_DOCKER_COMPOSE == 'true' && github.event_name != 'pull_request' }}
     needs: [build, prepare-postgres, infrastructure-terraform-plan, infrastructure-terraform-apply]
@@ -279,6 +284,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ !cancelled() }}
     env:
+      GITHUB_REPOSITORY: ${{ inputs.repository || env.GITHUB_REPOSITORY }}
       PGDATABASE: ${{ needs.prepare-postgres.outputs.DATABASE_NAME }}-service
     outputs:
       exitcode: ${{ steps.plan.outputs.exitcode }}
@@ -352,6 +358,7 @@ jobs:
   service-terraform-apply:
     runs-on: ubuntu-latest
     env:
+      GITHUB_REPOSITORY: ${{ inputs.repository || env.GITHUB_REPOSITORY }}
       PGDATABASE: ${{ needs.prepare-postgres.outputs.DATABASE_NAME }}-service
     environment: production
     needs: [prepare-postgres, service-terraform-plan, deploy]
