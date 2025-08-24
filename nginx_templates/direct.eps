@@ -8,11 +8,12 @@
     $banner = ("#" * $len) + "`n" + ("#" * $left) + $label + ("#" * $right) + "`n" + ("#" * $len)
     $banner
 =%>
-
+<% foreach ($p in $data.ports) { %>
 server {
-    listen 812;
+    listen <%= $p %>;
 
     proxy_connect_timeout 60s;
     proxy_socket_keepalive on;
     proxy_pass localhost:<%= $data.port %>;
 }
+<% } %>
