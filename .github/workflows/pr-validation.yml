@@ -15,17 +15,17 @@ jobs:
   http:
     uses: mahn-ke/.github/.github/workflows/template-deploy.yml@main
     with:
-      repo: ttrss-by-vincent
+      repository: ttrss-by-vincent
     secrets: inherit
 
   stream:
     uses: mahn-ke/.github/.github/workflows/template-deploy.yml@main
     with:
-      repo: matrix-by-vincent
+      repository: matrix-by-vincent
     secrets: inherit
 
   direct:
     uses: mahn-ke/.github/.github/workflows/template-deploy.yml@main
     with:
-      repo: rustdesk-by-vincent
+      repository: rustdesk-by-vincent
     secrets: inherit
