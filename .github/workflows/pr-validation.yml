@@ -9,23 +9,23 @@ concurrency:
 
 jobs:
   this:
-    uses: mahn-ke/.github/.github/workflows/template-deploy.yml@main
+    uses: mahn-ke/.github/.github/workflows/template-deploy.yml@support-for-multiple-ports
     secrets: inherit
 
   http:
-    uses: mahn-ke/.github/.github/workflows/template-deploy.yml@main
+    uses: mahn-ke/.github/.github/workflows/template-deploy.yml@support-for-multiple-ports
     with:
       repository: ttrss-by-vincent
     secrets: inherit
 
   stream:
-    uses: mahn-ke/.github/.github/workflows/template-deploy.yml@main
+    uses: mahn-ke/.github/.github/workflows/template-deploy.yml@support-for-multiple-ports
     with:
       repository: matrix-by-vincent
     secrets: inherit
 
   direct:
-    uses: mahn-ke/.github/.github/workflows/template-deploy.yml@main
+    uses: mahn-ke/.github/.github/workflows/template-deploy.yml@support-for-multiple-ports
     with:
       repository: rustdesk-by-vincent
     secrets: inherit
