@@ -1,9 +1,11 @@
-param(
-    [Parameter(Mandatory=$true)]
-    [string]$type
+param (
+    [Parameter(Mandatory)]
+    [PSCustomObject]$data
 )
 
 $ErrorActionPreference = 'stop'
+
+$type = $data.type
 
 $repo = [System.Environment]::GetEnvironmentVariable("GITHUB_REPOSITORY")
 if (-not $repo) {

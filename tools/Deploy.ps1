@@ -11,7 +11,7 @@ if ($repoName -notlike '*-by-vincent*') {
     exit 0
 }
 
-function Get-FirstHostPort {
+function Get-PortInfo {
     $composeFile = "docker-compose.yml"
 
     # Ensure powershell-yaml module is installed and imported
@@ -25,18 +25,32 @@ function Get-FirstHostPort {
         exit 1
     }
 
-    $type = ''  
     $firstLine = (Get-Content $composeFile -First 1).Trim()
-    if ($firstLine -and $firstLine.StartsWith('#')) {
-        $type = $firstLine.TrimStart('#').Trim()
-    } else {
-        $type = 'http'  # Default type if no comment is found
-        Write-Warning "No type specified in the first line of docker-compose.yml, defaulting to 'http'."
+    if (-not ($firstLine -and $firstLine.StartsWith('#'))) {
+        Write-Warning "No type specified in the first line of docker-compose.yml."
+        exit 1
     }
+
+    $type = $firstLine.TrimStart('#').Trim()
     $yaml = ConvertFrom-Yaml (Get-Content $composeFile -Raw) -Ordered
     if (-not $yaml.services) {
         Write-Error "No 'services' section found in docker-compose.yml"
         exit 1
+    }
+
+     if ($type -eq "direct") {
+        $ports = @()
+        foreach ($service in $yaml.services.Values) {
+            if (-not $service.ports) { 
+                continue 
+            }
+            foreach ($port in $service.ports) {
+                if ($port.Trim() -match '(\d+):\d+$') {
+                    $ports += $matches[1]
+                }
+            }
+        }
+        return @{ ports = $ports }
     }
 
     $portInfo = $null
@@ -67,7 +81,7 @@ if (-not [System.Environment]::GetEnvironmentVariable("NGINX_HOME")) {
     exit 1
 }
 
-$firstPortInfo = Get-FirstHostPort
+$firstPortInfo = Get-PortInfo
 
 if (-not $firstPortInfo) {
     Write-Error "Could not find a host port in docker-compose.yml"
@@ -101,11 +115,17 @@ function Invoke-ToolScript {
     Remove-Item "stdout.log","stderr.log" -ErrorAction SilentlyContinue
 }
 
+if ($firstPortInfo.type -ne 'http' -and $firstPortInfo.type -ne 'matrix') {
+    Write-Host "Port type is not 'http' or 'matrix'; skipping HTTPS configuration."
+    Write-Host "Deployment completed successfully."
+    exit 0
+}
+
 # Step 1: Generate NGINX configuration
-Invoke-ToolScript "../workflow/tools/New-NginxConfig.ps1" -type $firstPortInfo.type -port $firstPortInfo.port
+Invoke-ToolScript "../workflow/tools/New-NginxConfig.ps1" -data $firstPortInfo
 
 # Step 2: Try to apply NGINX configuration
-Invoke-ToolScript "../workflow/tools/Update-NginxConfig.ps1" -type $firstPortInfo.type
+Invoke-ToolScript "../workflow/tools/Update-NginxConfig.ps1" -data $firstPortInfo
 
 if ($firstPortInfo.type -ne 'http' -and $firstPortInfo.type -ne 'matrix') {
     Write-Host "Port type is not 'http' or 'matrix'; skipping HTTPS configuration."

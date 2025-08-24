@@ -1,9 +1,11 @@
 param (
-    [string]$type,
-    [string]$port
+    [Parameter(Mandatory)]
+    [PSCustomObject]$data
 )
 
 $ErrorActionPreference = 'stop'
+
+$type = $data.type
 
 $repo = [System.Environment]::GetEnvironmentVariable("GITHUB_REPOSITORY")
 if (-not $repo) {
@@ -29,7 +31,7 @@ $outFile = "output/$fqdn.conf"
 $nginxConfig = Invoke-EpsTemplate -Template $template -Binding @{
     fqdn         = $fqdn
     domainPrefix = $domainPrefix
-    port         = $port
+    data         = $data
     CERT_HOME    = $env:CERT_HOME -replace '\\', '/'
 }
 if (Test-Path "output") {
@@ -40,3 +42,4 @@ New-Item -ItemType Directory -Path $outDir -Force | Out-Null
 Set-Content -Path $outFile -Value $nginxConfig
 
 Write-Host "NGINX config generated: $outFile"
+exit 0
