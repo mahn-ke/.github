@@ -18,7 +18,7 @@ on:
         type: string
     secrets: {}
 
-env:
+environment:
   GITHUB_REPOSITORY: ${{ inputs.repository || env.GITHUB_REPOSITORY }}
 
 jobs:
