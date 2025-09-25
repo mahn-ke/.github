@@ -146,5 +146,5 @@ jobs:
         shell: pwsh
 
       - run: |
-          restic forget --keep-daily 1 --keep-weekly 7 --keep-monthly 4 --keep-yearly 12 --prune
+          restic forget --keep-daily 1 --keep-weekly 7 --keep-monthly 4 --keep-yearly 12  --tag "" --prune
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
