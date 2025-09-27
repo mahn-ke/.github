@@ -7,7 +7,7 @@
 name: Restore
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       date:
         description: 'Either restore snapshot before this date (YYYY-MM-DDTHH:MM:SS format, optional)'
