@@ -104,7 +104,7 @@ jobs:
 
           $latestSnapshot = $selectedSnapshotsByVolume.Values | Sort-Object { [datetime]$_.time } | Select-Object -Last 1
           if (!$latestSnapshot) {
-            Write-Host "At least one snapshot must be found matching the tag; exiting"
+            Write-Host "At least one snapshot must be found per volume; exiting"
             exit 1
           }
           
