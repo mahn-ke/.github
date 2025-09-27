@@ -155,7 +155,7 @@ jobs:
     uses: mahn-ke/.github/.github/workflows/template-backup.yml@main
     secrets: inherit
     with:
-      tags: prerestore_${{ needs.select_snapshots.outputs.TIMESTAMP }}
+      tags: prerestore,prerestore_${{ needs.select_snapshots.outputs.TIMESTAMP }}
 
   restore:
     needs: [backup, select_snapshots]
