@@ -1,8 +1,6 @@
 name: Dependency updates
 
 on:
-  push:
-    branches: [ "main" ]
   workflow_dispatch:
   schedule:
     - cron: '27 4 * * *' # Run at 4:27 AM (even numbers = higher load = higher chance of GitHub dropping it)
