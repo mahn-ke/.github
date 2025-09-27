@@ -135,7 +135,7 @@ jobs:
             Write-Host "------------------------------"
           }
 
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "SNAPSHOTS=$($snapshot_ids -join ',')"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "SNAPSHOTS=$($selectedSnapshotsByVolume.Values | ForEach-Object { $_.short_id } -join ',')"
           Add-Content -Path $env:GITHUB_OUTPUT -Value "TIMESTAMP=$(Get-Date -Format 'yyyyMMdd-HHmmss')"
         shell: pwsh
         
