@@ -70,30 +70,73 @@ jobs:
           $date = "${{ github.event.inputs.date }}"
           $tag = "${{ github.event.inputs.tag }}"
 
-          $snapshot_ids = @()
+          $snapshotsByVolume = @{}
+          $selectedSnapshotsByVolume = @{}
           foreach ($volume in $volumes) {
-            $snapshots = restic -r $repo snapshots --path "/$volume" --json | ConvertFrom-Json
+            $snapshotsByVolume[$volume] = restic -r $repo snapshots --path "/$volume" --json | ConvertFrom-Json
             if ($tag) {
-              $filtered = $snapshots | Where-Object { $_.tags -contains $tag }
+              $filtered = $snapshotsByVolume[$volume] | Where-Object { $_.tags -contains $tag }
               $snapshot = $filtered | Sort-Object -Property time -Descending | Select-Object -First 1
+              if (-not $snapshot) {
+                Write-Host "No snapshot found for volume $(($env:PROJECT_NAME))_${volume} with tag $tag"
+                continue
+              }
               Write-Host "Using snapshot id $($snapshot.short_id) with tag $tag for volume $(($env:PROJECT_NAME))_${volume} ($($snapshot.time)) (tags: $($snapshot.tags -join ', ')))"
+              $selectedSnapshotsByVolume[$volume] = $snapshot
+              continue
             }
+
             if ($date) {
               $target = [datetime]::Parse($date)
-              $snapshot = $snapshots | Sort-Object { [datetime]$_.time } | `
+              $snapshot = $snapshotsByVolume[$volume] | Sort-Object { [datetime]$_.time } | `
               Where-Object { [datetime]$_.time -le $target } | Select-Object -Last 1
+              if (-not $snapshot) {
+                Write-Host "No snapshot found for volume $(($env:PROJECT_NAME))_${volume} before $date"
+                continue
+              }
               Write-Host "Using snapshot id $($snapshot.short_id) closest to $date for volume $(($env:PROJECT_NAME))_${volume} ($($snapshot.time)) (tags: $($snapshot.tags -join ', '))"
+              $selectedSnapshotsByVolume[$volume] = $snapshot
+              continue
             }
 
-            if (-not $snapshot) {
-              Write-Host "No matching snapshot found for volume $(($env:PROJECT_NAME))_${volume}."
-              exit 1
-            }
-
-            $snapshot_ids += $snapshot.short_id
+            Write-Host "No matching snapshot found for volume $(($env:PROJECT_NAME))_${volume}"
           }
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "SNAPSHOTS=$($snapshot_ids -join ',')"
 
+          $latestSnapshot = $selectedSnapshotsByVolume.Values | Sort-Object { [datetime]$_.time } | Select-Object -Last 1
+          if (!$latestSnapshot) {
+            Write-Host "At least one snapshot must be found per volume; exiting"
+            exit 1
+          }
+          
+          $missingVolumes = $volumes | Where-Object { -not $selectedSnapshotsByVolume.ContainsKey($_) }
+          foreach ($mv in $missingVolumes) {
+            Write-Host "Finding closest snapshot for volume $(($env:PROJECT_NAME))_${mv}."
+            $snapshots = $snapshotsByVolume[$mv]
+            $snapshot = $snapshots | Sort-Object { [datetime]$_.time } | Where-Object { [datetime]$_.time -le [datetime]$($latestSnapshot.time) } | Select-Object -Last 1
+            if (-not $snapshot) {
+              Write-Host "No snapshot found for volume $(($env:PROJECT_NAME))_${mv} before $($latestSnapshot.time); exiting"
+              exit 2
+            }
+
+            Write-Host "Using snapshot id $($snapshot.short_id) closest to latestSnapshot ($($latestSnapshot.time)) for volume $(($env:PROJECT_NAME))_${mv} ($($snapshot.time)) (tags: $($snapshot.tags -join ', '))"
+            $selectedSnapshotsByVolume[$mv] = $snapshot
+          }
+
+          # for all volumes, print all available snapshot ID and time, and prefix selected with `>`
+          foreach ($volume in $volumes) {
+            Write-Host ""
+            Write-Host "------------------------------"
+            Write-Host "Available snapshots for volume $(($env:PROJECT_NAME))_${volume}:"
+            foreach ($s in $snapshotsByVolume[$volume] | Sort-Object { [datetime]$_.time }) {
+              $prefix = if ($s.short_id -eq $selectedSnapshotsByVolume[$volume].short_id) { '>' } else { ' ' }
+              $tagsPart = if ($s.tags -and $s.tags.Count -gt 0) { " (tags: $($s.tags -join ', '))" } else { "" }
+              Write-Host "$prefix $($s.short_id) $($s.time)$tagsPart"
+            }
+            Write-Host "------------------------------"
+          }
+
+          $orderedSnapshots = $(( $volumes | ForEach-Object { $selectedSnapshotsByVolume[$_].short_id } ) -join ',')
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "SNAPSHOTS=$orderedSnapshots"
           Add-Content -Path $env:GITHUB_OUTPUT -Value "TIMESTAMP=$(Get-Date -Format 'yyyyMMdd-HHmmss')"
         shell: pwsh
         
@@ -112,7 +155,7 @@ jobs:
     uses: mahn-ke/.github/.github/workflows/template-backup.yml@main
     secrets: inherit
     with:
-      tags: prerestore_${{ needs.select_snapshots.outputs.TIMESTAMP }}
+      tags: prerestore,prerestore_${{ needs.select_snapshots.outputs.TIMESTAMP }}
 
   restore:
     needs: [backup, select_snapshots]
