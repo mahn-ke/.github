@@ -124,6 +124,7 @@ jobs:
 
           # for all volumes, print all available snapshot ID and time, and prefix selected with `>`
           foreach ($volume in $volumes) {
+            Write-Host ""
             Write-Host "------------------------------"
             Write-Host "Available snapshots for volume $(($env:PROJECT_NAME))_${volume}:"
             foreach ($s in $snapshotsByVolume[$volume] | Sort-Object { [datetime]$_.time }) {
@@ -131,11 +132,11 @@ jobs:
               $tagsPart = if ($s.tags -and $s.tags.Count -gt 0) { " (tags: $($s.tags -join ', '))" } else { "" }
               Write-Host "$prefix $($s.short_id) $($s.time)$tagsPart"
             }
+            Write-Host "------------------------------"
           }
 
           Add-Content -Path $env:GITHUB_OUTPUT -Value "SNAPSHOTS=$($snapshot_ids -join ',')"
           Add-Content -Path $env:GITHUB_OUTPUT -Value "TIMESTAMP=$(Get-Date -Format 'yyyyMMdd-HHmmss')"
-          exit 2 #deliberately fail workflow
         shell: pwsh
         
   # can't be part of `backup`, as shared workflows can't use `environment`, which triggers approvals
