@@ -135,7 +135,8 @@ jobs:
             Write-Host "------------------------------"
           }
 
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "SNAPSHOTS=$(( $selectedSnapshotsByVolume.Values | ForEach-Object { $_.short_id } ) -join ',')"
+          $orderedSnapshots = $volumes | ForEach-Object { $selectedSnapshotsByVolume[$_] } -join ','
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "SNAPSHOTS=$($orderedSnapshots.short_id -join ',')"
           Add-Content -Path $env:GITHUB_OUTPUT -Value "TIMESTAMP=$(Get-Date -Format 'yyyyMMdd-HHmmss')"
         shell: pwsh
         
@@ -207,11 +208,10 @@ jobs:
             Write-Host "Restoring $(($env:PROJECT_NAME))_${volume} to $tmp"
             restic -r "$env:RESTIC_REPOSITORY" restore --path "/$volume" $($snapshots[$i]) --target "$tmp" --include "/"
             Write-Host "Copying restored data to $(($env:PROJECT_NAME))_${volume}"
-            $firstDirInRestoredTarget = Get-ChildItem -Path $tmp | Where-Object { $_.PSIsContainer } | Select-Object -First 1
             docker run --rm `
               -v "${tmp}:/from" `
               -v "$(($env:PROJECT_NAME))_${volume}:/to" `
-              alpine sh -c "cp -a /from/${firstDirInRestoredTarget.Name}/. /to/"
+              alpine sh -c "cp -a /from/${volume}/. /to/"
             Remove-Item -Recurse -Force $tmp
             $i++
           }
