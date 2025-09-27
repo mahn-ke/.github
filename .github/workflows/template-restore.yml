@@ -1,3 +1,62 @@
+# Required environment variables:
+# - RESTIC_ROOT:  Directory where restic repositories should be stored
+#
+# Required binaries/tools:
+# - restic (https://restic.net/)
+
+name: Restore
+
+on:
+  workflow_call:
+    inputs:
+      date:
+        description: 'Either restore snapshot before this date (YYYY-MM-DDTHH:MM:SS format, optional)'
+        required: false
+        type: string
+      tag:
+        description: 'Or restore latest backup with this tag (optional)'
+        required: false
+        type: string
+
+jobs:
+  select_snapshots:
+    outputs:
+      VOLUMES: ${{ steps.volumes.outputs.VOLUMES }}
+      SNAPSHOTS: ${{ steps.volumes.outputs.SNAPSHOTS }}
+      TIMESTAMP: ${{ steps.volumes.outputs.TIMESTAMP }}
+    runs-on: hetzner2
+    env:
+      RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
+    steps:
+      - name: Check RESTIC_ROOT is set
+        run: |
+          if (-not $env:RESTIC_ROOT) {
+            Write-Host "RESTIC_ROOT is not set"
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Ensure either date or tag is provided
+        run: |
+          $date = "${{ github.event.inputs.date }}".Trim()
+          $tag = "${{ github.event.inputs.tag }}".Trim()
+          if (-not $date -and -not $tag) {
+            Write-Host "Either provide the closest date to restore from or a tag to restore"
+            exit 1
+          }
+        shell: pwsh
+        
+      - name: Set environment variables and RESTIC_REPOSITORY
+        run: |
+          $REPO_NAME = Split-Path $env:GITHUB_REPOSITORY -Leaf
+          $PROJECT_NAME = $REPO_NAME -replace '-by-vincent', ''
+          Add-Content -Path $env:GITHUB_ENV -Value "RESTIC_REPOSITORY=$env:RESTIC_ROOT\$PROJECT_NAME"
+          Add-Content -Path $env:GITHUB_ENV -Value "PROJECT_NAME=$PROJECT_NAME"
+        shell: pwsh
+        
+      - name: Find snapshots for each volume
+        id: volumes
+        run: |
           # Find volumes to restore
           docker compose config | Out-File -FilePath config.yml -Encoding utf8
           $mappings = docker run --rm -v "${PWD}:/workdir" mikefarah/yq ".services[].volumes[].source" config.yml
@@ -71,3 +130,86 @@
           Add-Content -Path $env:GITHUB_OUTPUT -Value "SNAPSHOTS=$($snapshot_ids -join ',')"
           Add-Content -Path $env:GITHUB_OUTPUT -Value "TIMESTAMP=$(Get-Date -Format 'yyyyMMdd-HHmmss')"
           exit 2 #deliberately fail workflow
+        shell: pwsh
+        
+  # can't be part of `backup`, as shared workflows can't use `environment`, which triggers approvals
+  confirm:
+    needs: [select_snapshots]
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm restore
+        run: |
+          echo "Confirmed"
+      
+  backup:
+    needs: [confirm, select_snapshots]
+    uses: mahn-ke/.github/.github/workflows/template-backup.yml@main
+    secrets: inherit
+    with:
+      tags: prerestore_${{ needs.select_snapshots.outputs.TIMESTAMP }}
+
+  restore:
+    needs: [backup, select_snapshots]
+    runs-on: hetzner2
+    env:
+      RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
+    steps:
+      - name: Set environment variables and RESTIC_REPOSITORY
+        run: |
+          $REPO_NAME = Split-Path $env:GITHUB_REPOSITORY -Leaf
+          $PROJECT_NAME = $REPO_NAME -replace '-by-vincent', ''
+          Add-Content -Path $env:GITHUB_ENV -Value "RESTIC_REPOSITORY=$env:RESTIC_ROOT\$PROJECT_NAME"
+          Add-Content -Path $env:GITHUB_ENV -Value "PROJECT_NAME=$PROJECT_NAME"
+        shell: pwsh
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Shut down docker compose
+        env:
+          COMPOSE_PROJECT_NAME: ${{ env.PROJECT_NAME }}
+        run: docker compose down
+        shell: pwsh
+
+      - name: Delete all volume content
+        run: |
+          $volumes = "${{ needs.select_snapshots.outputs.VOLUMES }}".Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+
+          $volumes | ForEach-Object {
+            $volume = $_
+            Write-Host "Deleting content of volume: $(($env:PROJECT_NAME))_${volume}"
+            docker run --rm -i --mount "source=$(($env:PROJECT_NAME))_${volume},target=/data" alpine sh -c "rm -rf /data/*"
+          }
+        shell: pwsh
+
+      - name: Restore each volume to temp directory and copy into volume
+        run: |
+          $volumes = "${{ needs.select_snapshots.outputs.VOLUMES }}".Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+          $snapshots = "${{ needs.select_snapshots.outputs.SNAPSHOTS }}".Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+          if ($volumes.Count -ne $snapshots.Count) {
+            Write-Host "Number of volumes and snapshots do not match: $($volumes.Count) volumes, $($snapshots.Count) snapshots"
+            exit 1
+          }
+
+          $i = 0
+          $volumes | ForEach-Object {
+            $volume = $_
+            $tmp = Join-Path $env:TEMP ([guid]::NewGuid().ToString())
+            mkdir $tmp | Out-Null
+            Write-Host "Restoring $(($env:PROJECT_NAME))_${volume} to $tmp"
+            restic -r "$env:RESTIC_REPOSITORY" restore --path "/$volume" $($snapshots[$i]) --target "$tmp" --include "/"
+            Write-Host "Copying restored data to $(($env:PROJECT_NAME))_${volume}"
+            docker run --rm `
+              -v "${tmp}:/from" `
+              -v "$(($env:PROJECT_NAME))_${volume}:/to" `
+              alpine sh -c "cp -a /from/${volume}/. /to/"
+            Remove-Item -Recurse -Force $tmp
+            $i++
+          }
+        shell: pwsh
+
+  deploy:
+    needs: restore
+    uses: mahn-ke/.github/.github/workflows/template-deploy.yml@main
+    secrets: inherit
