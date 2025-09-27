@@ -169,6 +169,7 @@ jobs:
               -v "${tmp}:/from" `
               -v "$(($env:PROJECT_NAME))_${volume}:/to" `
               alpine sh -c "cp -a /from/${volume}/. /to/"
+            Remove-Item -Recurse -Force $tmp
             $i++
           }
         shell: pwsh
