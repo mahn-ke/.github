@@ -18,10 +18,6 @@ on:
         required: false
         type: string
 
-concurrency:
-  group: restore-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   select_snapshots:
     outputs:
