@@ -111,7 +111,7 @@ jobs:
           $missingVolumes = $volumes | Where-Object { -not $selectedSnapshotsByVolume.ContainsKey($_) }
           foreach ($mv in $missingVolumes) {
             Write-Host "Finding closest snapshot for volume $(($env:PROJECT_NAME))_${mv}."
-            $snapshots = restic -r $repo snapshots --path "/$mv" --json | ConvertFrom-Json
+            $snapshots = $snapshotsByVolume[$mv]
             $snapshot = $snapshots | Sort-Object { [datetime]$_.time } | Where-Object { [datetime]$_.time -le [datetime]$($latestSnapshot.time) } | Select-Object -Last 1
             if (-not $snapshot) {
               Write-Host "No snapshot found for volume $(($env:PROJECT_NAME))_${mv} before $($latestSnapshot.time); exiting"
