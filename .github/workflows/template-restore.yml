@@ -207,10 +207,11 @@ jobs:
             Write-Host "Restoring $(($env:PROJECT_NAME))_${volume} to $tmp"
             restic -r "$env:RESTIC_REPOSITORY" restore --path "/$volume" $($snapshots[$i]) --target "$tmp" --include "/"
             Write-Host "Copying restored data to $(($env:PROJECT_NAME))_${volume}"
+            $firstDirInRestoredTarget = Get-ChildItem -Path $tmp | Where-Object { $_.PSIsContainer } | Select-Object -First 1
             docker run --rm `
               -v "${tmp}:/from" `
               -v "$(($env:PROJECT_NAME))_${volume}:/to" `
-              alpine sh -c "cp -a /from/${volume}/. /to/"
+              alpine sh -c "cp -a /from/${firstDirInRestoredTarget.Name}/. /to/"
             Remove-Item -Recurse -Force $tmp
             $i++
           }
