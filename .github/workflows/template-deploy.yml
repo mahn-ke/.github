@@ -137,6 +137,12 @@ jobs:
       - name: Check if Terraform apply is required
         run: |
           echo "exitcode: ${{ steps.plan.outputs.exitcode }}"
+          
+          if [ "${{ steps.plan.outputs.exitcode }}" == "1" ]; then
+            echo "Error running terraform; see logs above"
+            exit 1
+          fi
+          
           if [ "${{ steps.plan.outputs.exitcode }}" == "0" ]; then
             echo "Configuration files found but no changes; skipping apply"
             exit 0
@@ -308,6 +314,12 @@ jobs:
       - name: Check if Terraform apply is required
         run: |
           echo "exitcode: ${{ steps.plan.outputs.exitcode }}"
+          
+          if [ "${{ steps.plan.outputs.exitcode }}" == "1" ]; then
+            echo "Error running terraform; see logs above"
+            exit 1
+          fi
+          
           if [ "${{ steps.plan.outputs.exitcode }}" == "0" ]; then
             echo "Configuration files found but no changes; skipping apply"
             exit 0
