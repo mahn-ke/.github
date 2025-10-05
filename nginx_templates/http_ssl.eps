@@ -45,6 +45,8 @@ server {
     ssl_certificate       <%= $CERT_HOME %>/certs/<%= $fqdn %>-chain.pem;
     ssl_certificate_key   <%= $CERT_HOME %>/certs/<%= $fqdn %>-key.pem;
 
+    client_max_body_size  2000G;
+
     location / {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
