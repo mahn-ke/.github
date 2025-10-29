@@ -35,6 +35,7 @@ server {
         alias <%= $CERT_HOME %>/.well-known/<%= $domainPrefix %>/.well-known/;
         autoindex on;
     }
+}
 
 server {
     listen 443      ssl http2;
