@@ -107,8 +107,9 @@ Invoke-ToolScript "../workflow/tools/New-NginxConfig.ps1" -type $firstPortInfo.t
 # Step 2: Try to apply NGINX configuration
 Invoke-ToolScript "../workflow/tools/Update-NginxConfig.ps1" -type $firstPortInfo.type
 
-if ($firstPortInfo.type -ne 'http' -and $firstPortInfo.type -ne 'matrix') {
-    Write-Host "Port type is not 'http' or 'matrix'; skipping HTTPS configuration."
+$allowedTypes = @('http','matrix','nextcloud')
+if ($allowedTypes -notcontains $firstPortInfo.type) {
+    Write-Host "Port type '$($firstPortInfo.type)' skipped HTTPS, as these don't require it: $($allowedTypes -join ', ')."
     Write-Host "Deployment completed successfully."
     exit 0
 }
