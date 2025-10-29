@@ -98,15 +98,7 @@ server {
     # Remove X-Powered-By, which is an information leak
     fastcgi_hide_header X-Powered-By;
 
-    # Set .mjs and .wasm MIME types
-    # Either include it in the default mime.types list
-    # and include that list explicitly or add the file extension
-    # only for Nextcloud like below:
     include mime.types;
-    types {
-        text/javascript js mjs;
-	application/wasm wasm;
-    }
 
     # Specify how to handle directories -- specifying `/index.php$request_uri`
     # here as the fallback means that Nginx always exhibits the desired behaviour
@@ -199,7 +191,6 @@ server {
 
         # Forward script info and flags to the backend as headers
         proxy_set_header SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        proxy_set_header PATH_INFO $path_info;
         proxy_set_header HTTPS on;
         proxy_set_header modHeadersAvailable true;
         proxy_set_header front_controller_active true;
