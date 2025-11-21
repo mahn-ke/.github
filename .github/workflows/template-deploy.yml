@@ -19,7 +19,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Check for Dockerfile
         id: check_dockerfile
@@ -108,7 +108,7 @@ jobs:
           echo "$SECRETS_CONTEXT" | to_envs >> $GITHUB_ENV
           
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
@@ -191,7 +191,7 @@ jobs:
           echo "$SECRETS_CONTEXT" | to_envs >> $GITHUB_ENV
 
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
@@ -232,13 +232,13 @@ jobs:
           }
 
       - name: Checkout current repository to src (with submodules)
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           path: src
           submodules: recursive
 
       - name: Checkout mahn-ke/.github to workflow
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: mahn-ke/.github
           path: workflow 
@@ -286,7 +286,7 @@ jobs:
           echo "$SECRETS_CONTEXT" | to_envs >> $GITHUB_ENV
           
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
@@ -359,7 +359,7 @@ jobs:
           echo "$SECRETS_CONTEXT" | to_envs >> $GITHUB_ENV
 
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
