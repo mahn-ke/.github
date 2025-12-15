@@ -12,6 +12,10 @@ server {
     listen 80;
     server_name <%= $fqdn %>;
 
+    if ($http_user_agent ~* "GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-User|Claude-SearchBot|Google-CloudVertexBot") {
+        return 444;
+    }
+
     location / {
         return 301 https://$host$request_uri;
     }
