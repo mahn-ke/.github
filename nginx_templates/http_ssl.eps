@@ -12,6 +12,10 @@ server {
     listen 80;
     server_name <%= $fqdn %>;
 
+    if ($http_user_agent ~* "GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-User|Claude-SearchBot|Google-CloudVertexBot") {
+        return 444;
+    }
+
     location / {
         return 301 https://$host$request_uri;
     }
@@ -26,6 +30,10 @@ server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
     server_name <%= $fqdn %>;
+
+    if ($http_user_agent ~* "GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-User|Claude-SearchBot|Google-CloudVertexBot") {
+        return 444;
+    }
 
     ssl_session_timeout 1d;
     ssl_session_cache shared:MozSSL:10m;  # about 40000 sessions
