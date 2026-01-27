@@ -182,7 +182,7 @@ jobs:
 
       - name: Delete all volume content
         run: |
-          $volumes = "${{ needs.select_snapshots.outputs.VOLUMES }}".Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+          $volumes = @("${{ needs.select_snapshots.outputs.VOLUMES }}".Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
 
           $volumes | ForEach-Object {
             $volume = $_
@@ -193,8 +193,8 @@ jobs:
 
       - name: Restore each volume to temp directory and copy into volume
         run: |
-          $volumes = "${{ needs.select_snapshots.outputs.VOLUMES }}".Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
-          $snapshots = "${{ needs.select_snapshots.outputs.SNAPSHOTS }}".Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+          $volumes = @("${{ needs.select_snapshots.outputs.VOLUMES }}".Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
+          $snapshots = @("${{ needs.select_snapshots.outputs.SNAPSHOTS }}".Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
           if ($volumes.Count -ne $snapshots.Count) {
             Write-Host "Number of volumes and snapshots do not match: $($volumes.Count) volumes, $($snapshots.Count) snapshots"
             exit 1
