@@ -60,7 +60,10 @@ jobs:
           # Find volumes to restore
           docker compose config | Out-File -FilePath config.yml -Encoding utf8
           $mappings = docker run --rm -v "${PWD}:/workdir" mikefarah/yq ".services[].volumes[].source" config.yml
-          $unique_mappings = $mappings | Sort-Object | Get-Unique
+          $unique_mappings = $mappings | Sort-Object | Get-Unique | Where-Object {
+            $driver = docker run --rm -v "${PWD}:/workdir" mikefarah/yq ".volumes.$_.driver" config.yml
+            $driver -ne 'fentas/davfs'
+          }
           $volumes = $unique_mappings | Where-Object { $_ -notmatch '[\\/]' }
           Add-Content -Path $env:GITHUB_OUTPUT -Value "VOLUMES=$($volumes -join ',')"
           Write-Host "Volumes to restore:`n$($volumes -join "`n")"

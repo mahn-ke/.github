@@ -109,7 +109,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $mappings = docker run --rm -v "${PWD}:/workdir" mikefarah/yq ".services[].volumes[].source" config.yml
-          $unique_mappings = $mappings | Sort-Object | Get-Unique
+          $unique_mappings = $mappings | Sort-Object | Get-Unique | Where-Object {
+            $driver = docker run --rm -v "${PWD}:/workdir" mikefarah/yq ".volumes.$_.driver" config.yml
+            $driver -ne 'fentas/davfs'
+          }
           $volumes = $unique_mappings | Where-Object { $_ -notmatch '[\\/]' }
           $mounts = $unique_mappings | Where-Object { $_ -match '[\\/]' }
 
