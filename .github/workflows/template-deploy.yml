@@ -202,7 +202,7 @@ jobs:
         working-directory: infrastructure
 
       - name: Download Terraform plan
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: tfplan-infrastructure
           path: infrastructure
@@ -370,7 +370,7 @@ jobs:
         working-directory: service
 
       - name: Download Terraform plan
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: tfplan-service
           path: service
