@@ -45,8 +45,8 @@ function Get-FirstHostPort {
             continue 
         }
         foreach ($port in $service.ports) {
-            # Trim whitespace and match "hostPort:containerPort" or "ip:hostPort:containerPort"
-            if ($port.Trim() -match '(\d+):\d+$') {
+            # Trim whitespace and matches 21114 in `127.0.0.1:21114:21115/tcp` `21114:21115` `21114:21115/udp`
+            if ($port.Trim() -match '(\d+):\d+(?:/\w+)?$') {
                 $portInfo = @{
                     port = $matches[1]
                     type = $type
