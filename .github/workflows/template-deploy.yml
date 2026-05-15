@@ -115,7 +115,7 @@ jobs:
 
       - run: terraform version
 
-      - run: terraform init -upgrade
+      - run: terraform init
         working-directory: infrastructure
 
       - name: exit if terraform fmt is not clean
@@ -293,7 +293,7 @@ jobs:
 
       - run: terraform version
 
-      - run: terraform init -upgrade
+      - run: terraform init
         working-directory: service
 
       - name: exit if terraform fmt is not clean
