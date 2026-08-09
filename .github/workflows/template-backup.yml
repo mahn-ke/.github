@@ -22,6 +22,7 @@ jobs:
     outputs:
       has-docker-compose: ${{ steps.has-docker-compose.outputs.has-docker-compose }}
       has-backup: ${{ steps.check-for-backup.outputs.has-backup }}
+      no-backup: ${{ steps.check-no-backup.outputs.no-backup }}
     steps:
       - name: Check RESTIC_ROOT is set
         run: |
@@ -56,11 +57,21 @@ jobs:
             Add-Content -Path $env:GITHUB_OUTPUT -Value "has-backup=true"
           }
         shell: pwsh
+
+      - name: Check for .no-backup file
+        id: check-no-backup
+        run: |
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "no-backup=false"
+          if (Test-Path '.no-backup') {
+            Write-Host ".no-backup file found; skipping backup for this repository"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "no-backup=true"
+          }
+        shell: pwsh
   init:
     runs-on: hetzner2
     environment: production
     needs: prepare
-    if: needs.prepare.outputs.has-docker-compose == 'true' && needs.prepare.outputs.has-backup == 'false'
+    if: needs.prepare.outputs.has-docker-compose == 'true' && needs.prepare.outputs.has-backup == 'false' && needs.prepare.outputs.no-backup == 'false'
     env:
       RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
     steps:
@@ -79,7 +90,7 @@ jobs:
   backup:
     runs-on: hetzner2
     needs: prepare
-    if: needs.prepare.outputs.has-docker-compose == 'true' && needs.prepare.outputs.has-backup == 'true'
+    if: needs.prepare.outputs.has-docker-compose == 'true' && needs.prepare.outputs.has-backup == 'true' && needs.prepare.outputs.no-backup == 'false'
     env:
       RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
       INPUT_TAGS: ${{ inputs.tags || '' }}
