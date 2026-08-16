@@ -10,7 +10,15 @@ Instead of createing a new repository, add the name of the project to the approp
 1. Create `docker-compose.yml` in the new repostiory with any of the following content in line 1:
     - `#http` for HTTP+HTTPS
     - `#stream` for binary stream
-2. Commit and push the changes to the repository; it will be avaialble at `https://xyz.by.vincent.mahn.ke`
+2. To configure CORS response headers, add this top-level Compose extension field. The defaults preserve the existing behavior: `cors_allow_origin` is `http://127.0.0.1:<host-port>`, `cors_allow_credentials` is `true`, and the methods and headers are omitted.
+     ```yaml
+     x-nginx:
+         cors_allow_origin: "http://localhost:4437"
+         cors_allow_credentials: "true"
+         cors_allow_methods: "GET, OPTIONS"
+         cors_allow_headers: "Content-Type, Authorization"
+     ```
+3. Commit and push the changes to the repository; it will be avaialble at `https://xyz.by.vincent.mahn.ke`
 
 ### Terraform
 

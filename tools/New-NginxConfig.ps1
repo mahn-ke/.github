@@ -1,6 +1,10 @@
 param (
     [string]$type,
-    [string]$port
+    [string]$port,
+    [string]$corsAllowOrigin,
+    [string]$corsAllowCredentials,
+    [string]$corsAllowMethods,
+    [string]$corsAllowHeaders
 )
 
 $ErrorActionPreference = 'stop'
@@ -18,6 +22,13 @@ if ($repoName -notlike '*-by-vincent*') {
 $domainPrefix = (($repoName -replace '-by-vincent', '') -replace '-', '.')
 $fqdn = $domainPrefix + '.by.vincent.mahn.ke'
 
+if (-not $corsAllowOrigin) {
+    $corsAllowOrigin = "http://127.0.0.1:$port"
+}
+if (-not $corsAllowCredentials) {
+    $corsAllowCredentials = "true"
+}
+
 if (-not (Get-Module -ListAvailable -Name EPS)) {
     Install-Module -Name EPS -Force -Scope CurrentUser
 }
@@ -30,7 +41,11 @@ $nginxConfig = Invoke-EpsTemplate -Template $template -Binding @{
     fqdn         = $fqdn
     domainPrefix = $domainPrefix
     port         = $port
-    CERT_HOME    = $env:CERT_HOME -replace '\\', '/'
+    corsAllowOrigin      = $corsAllowOrigin
+    corsAllowCredentials = $corsAllowCredentials
+    corsAllowMethods     = $corsAllowMethods
+    corsAllowHeaders     = $corsAllowHeaders
+    CERT_HOME            = $env:CERT_HOME -replace '\\', '/'
 }
 if (Test-Path "output") {
     Remove-Item "output" -Recurse -Force
