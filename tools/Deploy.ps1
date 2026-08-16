@@ -114,7 +114,13 @@ function Invoke-ToolScript {
 }
 
 # Step 1: Generate NGINX configuration
-Invoke-ToolScript "../workflow/tools/New-NginxConfig.ps1" -type $firstPortInfo.type -port $firstPortInfo.port -corsAllowOrigin $firstPortInfo.corsAllowOrigin -corsAllowCredentials $firstPortInfo.corsAllowCredentials -corsAllowMethods $firstPortInfo.corsAllowMethods -corsAllowHeaders $firstPortInfo.corsAllowHeaders
+$nginxConfigArguments = @('-type', $firstPortInfo.type, '-port', $firstPortInfo.port)
+foreach ($setting in @('corsAllowOrigin', 'corsAllowCredentials', 'corsAllowMethods', 'corsAllowHeaders')) {
+    if ($firstPortInfo[$setting]) {
+        $nginxConfigArguments += "-$setting", $firstPortInfo[$setting]
+    }
+}
+Invoke-ToolScript "../workflow/tools/New-NginxConfig.ps1" @nginxConfigArguments
 
 # Step 2: Try to apply NGINX configuration
 Invoke-ToolScript "../workflow/tools/Update-NginxConfig.ps1" -type $firstPortInfo.type
@@ -137,7 +143,8 @@ $secondConfig = $firstPortInfo.type + '_ssl'
 Invoke-ToolScript "../workflow/tools/New-Certificate.ps1"
 
 # Step 4: Generate HTTP+HTTPS NGINX configuration
-Invoke-ToolScript "../workflow/tools/New-NginxConfig.ps1" -type $secondConfig -port $firstPortInfo.port -corsAllowOrigin $firstPortInfo.corsAllowOrigin -corsAllowCredentials $firstPortInfo.corsAllowCredentials -corsAllowMethods $firstPortInfo.corsAllowMethods -corsAllowHeaders $firstPortInfo.corsAllowHeaders
+$nginxConfigArguments[1] = $secondConfig
+Invoke-ToolScript "../workflow/tools/New-NginxConfig.ps1" @nginxConfigArguments
 
 # Step 5: Try to apply HTTP+HTTPS NGINX configuration
 Invoke-ToolScript "../workflow/tools/Update-NginxConfig.ps1" -type $secondConfig
