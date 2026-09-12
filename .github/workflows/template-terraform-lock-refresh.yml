@@ -1,0 +1,61 @@
+name: Refresh Terraform provider lock files
+
+on:
+  workflow_call:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Expose GitHub environment as shell variables
+        env:
+          SECRETS_CONTEXT: ${{ toJson(secrets) }}
+        run: |
+          # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#setting-an-environment-variable
+          # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#multiline-strings
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          to_envs() { jq -r "to_entries[] | \"\(.key)<<$EOF\n\(.value)\n$EOF\n\""; }
+          echo "$SECRETS_CONTEXT" | to_envs >> $GITHUB_ENV
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+
+      - run: terraform version
+
+      - name: Determine database name
+        id: db-name
+        run: |
+          REPO_NAME="$(basename "$GITHUB_REPOSITORY")"
+          DATABASE_NAME="$(echo "$REPO_NAME" | sed 's/-by-vincent//' | tr '-' '.')"
+          echo "DATABASE_NAME=$DATABASE_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Refresh infrastructure lock file
+        if: hashFiles('infrastructure/*.tf') != ''
+        env:
+          PGDATABASE: "${{ steps.db-name.outputs.DATABASE_NAME }}-infrastructure"
+        run: terraform init -upgrade
+        working-directory: infrastructure
+
+      - name: Refresh service lock file
+        if: hashFiles('service/*.tf') != ''
+        env:
+          PGDATABASE: "${{ steps.db-name.outputs.DATABASE_NAME }}-service"
+        run: terraform init -upgrade
+        working-directory: service
+
+      - name: Commit and push refreshed lock files, if any
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- '*.terraform.lock.hcl'; then
+            echo "No lock file changes; nothing to commit."
+            exit 0
+          fi
+          git add -- '*.terraform.lock.hcl'
+          git commit -m "chore: Refresh terraform provider lock files"
+          git push
