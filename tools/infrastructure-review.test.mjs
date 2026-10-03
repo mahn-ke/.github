@@ -12,7 +12,7 @@ for (const scenario of ['green', 'failed', 'changed', 'rerun', 'new-run', 'stale
     const directory = mkdtempSync(join(tmpdir(), 'policy-integration-'));
     try {
       const pr = { number: 1, state: 'open', draft: false, mergeable_state: scenario === 'dirty' ? 'dirty' : 'clean',
-        labels: [{ name: 'automerge' }], user: { login: 'renovate[bot]' },
+        labels: [{ name: 'automerge' }], user: { login: 'ViMaSter' },
         head: { sha: 'a'.repeat(40), ref: 'renovate/example', repo: { full_name: 'mahn-ke/gdqreminder-by-vincent' } },
         base: { sha: 'b'.repeat(40), ref: 'main', repo: { full_name: 'mahn-ke/gdqreminder-by-vincent' } } };
       const run = { id: 123, run_attempt: 1, head_sha: pr.head.sha, status: 'completed', event: 'pull_request',

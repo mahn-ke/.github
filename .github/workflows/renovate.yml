@@ -30,7 +30,11 @@ jobs:
         uses: renovatebot/github-action@v46.1.14
         with:
           token: ${{ secrets.RENOVATE_TOKEN }}
+          docker-cmd-file: .github/renovate-entrypoint.sh
+          docker-user: root
+          env-regex: '^(?:RENOVATE_\w+|TERRAFORM_VERSION)$'
         env:
+          TERRAFORM_VERSION: '1.16.5'
           RENOVATE_AUTODISCOVER: true
           RENOVATE_AUTODISCOVER_FILTER: ${{ inputs.repositories || 'mahn-ke/*' }}
           RENOVATE_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'full' || '' }}

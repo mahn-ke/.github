@@ -1,5 +1,6 @@
 export const requiredJobs = ['build', 'prepare-postgres',
   'infrastructure-terraform-plan', 'service-terraform-plan'].map(name => `deploy / ${name}`);
+const renovateAuthor = 'ViMaSter';
 
 export function evaluatePolicy({ pr, run, jobs }) {
   if (pr.draft || pr.state !== 'open' || run.event !== 'pull_request' ||
@@ -18,6 +19,7 @@ export function evaluatePolicy({ pr, run, jobs }) {
     changed ||= changes;
   }
   return { changed, allowed: true,
-    automerge: !changed && pr.labels.some(label => label.name === 'automerge') &&
+    automerge: !changed && pr.user?.login.toLowerCase() === renovateAuthor.toLowerCase() &&
+      pr.labels.some(label => label.name === 'automerge') &&
       pr.head.repo?.full_name === pr.base.repo?.full_name && pr.head.ref.startsWith('renovate/') };
 }

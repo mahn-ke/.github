@@ -4,7 +4,7 @@ import { evaluatePolicy, requiredJobs } from './infrastructure-policy.mjs';
 
 function fixture(changed = false) {
   return {
-    pr: { state: 'open', draft: false, labels: [{ name: 'automerge' }],
+    pr: { state: 'open', draft: false, user: { login: 'ViMaSter' }, labels: [{ name: 'automerge' }],
       head: { sha: 'a'.repeat(40), ref: 'renovate/example', repo: { full_name: 'owner/repo' } },
       base: { sha: 'b'.repeat(40), repo: { full_name: 'owner/repo' } } },
     run: { id: 123, event: 'pull_request', head_sha: 'a'.repeat(40), status: 'completed', conclusion: 'success' },
@@ -16,6 +16,9 @@ test('green no-change plans permit only scoped same-repository Renovate automerg
   assert.deepEqual(evaluatePolicy(fixture()), { allowed: true, changed: false, automerge: true });
   for (const mutate of [input => { input.pr.head.ref = 'feature/other'; },
     input => { input.pr.labels = []; },
+    input => { input.pr.user.login = 'dependabot[bot]'; },
+    input => { input.pr.user.login = 'renovate[bot]'; },
+    input => { input.pr.user = undefined; },
     input => { input.pr.head.repo.full_name = 'fork/repo'; },
     input => { input.pr.head.repo = null; }]) {
     const input = fixture();
