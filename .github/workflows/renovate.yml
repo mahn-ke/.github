@@ -34,4 +34,4 @@ jobs:
           RENOVATE_AUTODISCOVER: true
           RENOVATE_AUTODISCOVER_FILTER: ${{ inputs.repositories || 'mahn-ke/*' }}
           RENOVATE_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'full' || '' }}
-          RENOVATE_ALLOWED_COMMANDS: '["^cd (infrastructure|service) && terraform init -upgrade$"]'
+          RENOVATE_ALLOWED_COMMANDS: '["^terraform -chdir=(infrastructure|service) init -backend=false -upgrade$"]'
