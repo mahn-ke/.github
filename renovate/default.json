@@ -15,6 +15,7 @@
       "terraform -chdir=infrastructure init -backend=false -upgrade",
       "terraform -chdir=service init -backend=false -upgrade"
     ],
+    "executionMode": "branch",
     "fileFilters": ["**/.terraform.lock.hcl"],
     "excludeCommitPaths": []
   }
