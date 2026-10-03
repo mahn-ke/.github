@@ -5,7 +5,7 @@ on:
     inputs:
       repositories:
         description: Repository autodiscovery filter
-        default: mahn-ke/gdqreminder-by-vincent
+        default: mahn-ke/*
         required: true
         type: string
       dry_run:

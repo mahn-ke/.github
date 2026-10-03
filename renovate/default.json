@@ -9,6 +9,11 @@
   },
   "packageRules": [
     {
+      "matchUpdateTypes": ["major"],
+      "enabled": false,
+      "labels": []
+    },
+    {
       "matchDatasources": ["docker"],
       "matchPackageNames": ["/postgres/"],
       "matchUpdateTypes": ["major"],
