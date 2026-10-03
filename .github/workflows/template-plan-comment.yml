@@ -1,0 +1,68 @@
+name: Publish Terraform plan PNGs
+
+on:
+  workflow_call:
+    inputs:
+      run_id:
+        required: true
+        type: string
+      run_attempt:
+        required: true
+        type: string
+    secrets:
+      PLAN_IMAGE_TOKEN:
+        required: false
+      RENOVATE_TOKEN:
+        required: false
+      TF_VAR_GITHUB_PAT:
+        required: false
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+jobs:
+  comment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout trusted reporting tools
+        uses: actions/checkout@v6
+        with:
+          repository: mahn-ke/.github
+          ref: main
+          path: policy-tools
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Install attachment-capable GitHub CLI
+        env:
+          GH_VERSION: 2.102.0
+        run: |
+          directory=$(mktemp -d)
+          trap 'rm -rf "$directory"' EXIT
+          cd "$directory"
+          archive="gh_${GH_VERSION}_linux_amd64.tar.gz"
+          curl -fsSLO "https://github.com/cli/cli/releases/download/v${GH_VERSION}/${archive}"
+          curl -fsSLO "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_checksums.txt"
+          awk -v archive="$archive" '$2 == archive { print }' "gh_${GH_VERSION}_checksums.txt" > selected-checksum.txt
+          test -s selected-checksum.txt
+          sha256sum --check selected-checksum.txt
+          tar -xzf "$archive"
+          mkdir -p "$RUNNER_TEMP/plan-comment-bin"
+          install -m 0755 "gh_${GH_VERSION}_linux_amd64/bin/gh" "$RUNNER_TEMP/plan-comment-bin/gh"
+          echo "$RUNNER_TEMP/plan-comment-bin" >> "$GITHUB_PATH"
+
+      - name: Publish current PR plan images
+        run: node policy-tools/tools/plan-comment.mjs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PLAN_RUN_ID: ${{ inputs.run_id }}
+          PLAN_RUN_ATTEMPT: ${{ inputs.run_attempt }}
+          PLAN_IMAGE_TOKEN: ${{ secrets.PLAN_IMAGE_TOKEN }}
+          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+          TF_VAR_GITHUB_PAT: ${{ secrets.TF_VAR_GITHUB_PAT }}

@@ -176,7 +176,7 @@ jobs:
         run: echo Changed plan requires production approval
 
       - name: Checkout trusted plan reporting tools
-        if: inputs.infrastructure_review && steps.plan.outputs.exitcode == '2'
+        if: steps.plan.outputs.exitcode == '2'
         uses: actions/checkout@v6
         with:
           repository: mahn-ke/.github
@@ -185,7 +185,7 @@ jobs:
           persist-credentials: false
 
       - name: Render infrastructure plan image
-        if: inputs.infrastructure_review && steps.plan.outputs.exitcode == '2'
+        if: steps.plan.outputs.exitcode == '2'
         env:
           PLAN_EXIT: ${{ steps.plan.outputs.exitcode }}
           PLAN_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -197,11 +197,13 @@ jobs:
         working-directory: infrastructure
 
       - name: Upload infrastructure plan image
-        if: inputs.infrastructure_review && steps.plan.outputs.exitcode == '2'
+        if: steps.plan.outputs.exitcode == '2'
         uses: actions/upload-artifact@v7
         with:
           name: terraform-plan-image-infrastructure
-          path: plan-images-infrastructure/infrastructure.png
+          path: |
+            plan-images-infrastructure/infrastructure.png
+            plan-images-infrastructure/report.json
           overwrite: true
           if-no-files-found: error
           retention-days: 7
@@ -386,7 +388,7 @@ jobs:
         run: echo Changed plan requires production approval
 
       - name: Checkout trusted plan reporting tools
-        if: inputs.infrastructure_review && steps.plan.outputs.exitcode == '2'
+        if: steps.plan.outputs.exitcode == '2'
         uses: actions/checkout@v6
         with:
           repository: mahn-ke/.github
@@ -395,7 +397,7 @@ jobs:
           persist-credentials: false
 
       - name: Render service plan image
-        if: inputs.infrastructure_review && steps.plan.outputs.exitcode == '2'
+        if: steps.plan.outputs.exitcode == '2'
         env:
           PLAN_EXIT: ${{ steps.plan.outputs.exitcode }}
           PLAN_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -407,11 +409,13 @@ jobs:
         working-directory: service
 
       - name: Upload service plan image
-        if: inputs.infrastructure_review && steps.plan.outputs.exitcode == '2'
+        if: steps.plan.outputs.exitcode == '2'
         uses: actions/upload-artifact@v7
         with:
           name: terraform-plan-image-service
-          path: plan-images-service/service.png
+          path: |
+            plan-images-service/service.png
+            plan-images-service/report.json
           overwrite: true
           if-no-files-found: error
           retention-days: 7
