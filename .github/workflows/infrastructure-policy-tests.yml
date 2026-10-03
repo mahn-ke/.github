@@ -1,0 +1,31 @@
+name: Test infrastructure policy helpers
+
+on:
+  push:
+    paths: ['tools/*.mjs', '.github/workflows/infrastructure-policy-tests.yml']
+  pull_request:
+    paths: ['tools/*.mjs', '.github/workflows/infrastructure-policy-tests.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: node --test tools/*.test.mjs
+        working-directory: .
+  graph-smoke-test:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: TEST_PONTO=true node --test tools/render-plan.test.mjs

@@ -2,6 +2,16 @@ name: Dependency updates
 
 on:
   workflow_dispatch:
+    inputs:
+      repositories:
+        description: Repository autodiscovery filter
+        default: mahn-ke/gdqreminder-by-vincent
+        required: true
+        type: string
+      dry_run:
+        description: Preview updates without creating pull requests
+        default: true
+        type: boolean
   schedule:
     - cron: '27 4 * * *' # Run at 4:27 AM (even numbers = higher load = higher chance of GitHub dropping it)
 
@@ -22,4 +32,6 @@ jobs:
           token: ${{ secrets.RENOVATE_TOKEN }}
         env:
           RENOVATE_AUTODISCOVER: true
-          RENOVATE_AUTODISCOVER_FILTER: "mahn-ke/*"
+          RENOVATE_AUTODISCOVER_FILTER: ${{ inputs.repositories || 'mahn-ke/*' }}
+          RENOVATE_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'full' || '' }}
+          RENOVATE_ALLOWED_COMMANDS: '["^cd (infrastructure|service) && terraform init -upgrade$"]'

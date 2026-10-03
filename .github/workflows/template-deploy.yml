@@ -11,11 +11,16 @@ name: Deploy service, generate certificates, and update NGINX configuration
 
 on:
   workflow_call:
+    inputs:
+      infrastructure_review:
+        type: boolean
+        default: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       packages: write
     steps:
       - name: Checkout repository
@@ -33,12 +38,17 @@ jobs:
           fi
 
       - name: Log in to GitHub Container Registry
-        if: steps.check_dockerfile.outputs.exists == 'true'
+        if: steps.check_dockerfile.outputs.exists == 'true' && github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and run Docker test stage
+        if: inputs.infrastructure_review && steps.check_dockerfile.outputs.exists == 'true'
+        run: docker build --target test .
+        working-directory: app
 
       - name: Build Docker image
         if: steps.check_dockerfile.outputs.exists == 'true'
@@ -66,7 +76,13 @@ jobs:
            PGUSER: ${{ secrets.PGUSER }}
            PGPASSWORD: ${{ secrets.PGPASSWORD }}
            PGDATABASE: "postgres"
+           REVIEW_POLICY: ${{ inputs.infrastructure_review }}
         run: |
+          if [ "$REVIEW_POLICY" = "true" ]; then
+            : "${PGHOST:?Missing PostgreSQL host; dependency PRs need Actions credentials}"
+            : "${PGUSER:?Missing PostgreSQL user}"
+            : "${PGPASSWORD:?Missing PostgreSQL password}"
+          fi
           REPO_NAME="$(basename "$GITHUB_REPOSITORY")"
           DATABASE_NAME="$(echo "$REPO_NAME" | sed 's/-by-vincent//' | tr '-' '.')"
           echo "DATABASE_NAME=$DATABASE_NAME" >> $GITHUB_OUTPUT
@@ -80,11 +96,11 @@ jobs:
               echo "Database '$db' already exists."
               continue
             fi
-            createdb "$db"
-            if [ $? -ne 0 ]; then
-              echo "Failed to create database '$db'."
+            if [ "$REVIEW_POLICY" = "true" ] && [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+              echo "Missing state database; PR validation must not create infrastructure."
               exit 1
             fi
+            createdb "$db"
             echo "Database '$db' created."
           done
 
@@ -112,6 +128,8 @@ jobs:
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
 
       - run: terraform version
 
@@ -131,33 +149,57 @@ jobs:
         id: plan
         continue-on-error: true
         run: | 
+          set +e
           terraform plan -input=false --out=tfplan --detailed-exitcode
+          plan_exit=$?
+          echo "exitcode=$plan_exit" >> "$GITHUB_OUTPUT"
+          exit "$plan_exit"
         working-directory: infrastructure
 
       - name: Check if Terraform apply is required
+        env:
+          PLAN_EXIT: ${{ steps.plan.outputs.exitcode }}
         run: |
-          echo "exitcode: ${{ steps.plan.outputs.exitcode }}"
-          
-          if [ "${{ steps.plan.outputs.exitcode }}" == "1" ]; then
-            echo "Error running terraform; see logs above"
-            exit 1
-          fi
-          
-          if [ "${{ steps.plan.outputs.exitcode }}" == "0" ]; then
-            echo "Configuration files found but no changes; skipping apply"
-            exit 0
-          fi
-          
-          if grep -q "No configuration files" <<<"${{ steps.plan.outputs.stderr }}"; then
-            echo "No configuration files found; skipping apply"
-            exit 0
-          fi
-
-          echo "Configuration files found and changes; running apply"
+          case "$PLAN_EXIT" in
+            0) echo "No changes" ;;
+            2) echo "Changes detected" ;;
+            *) echo "Terraform plan failed or returned no exit code"; exit 1 ;;
+          esac
         working-directory: infrastructure
 
+      - name: Checkout trusted plan reporting tools
+        if: inputs.infrastructure_review && github.event_name == 'pull_request'
+        uses: actions/checkout@v6
+        with:
+          repository: mahn-ke/.github
+          ref: main
+          path: policy-tools
+          persist-credentials: false
+
+      - name: Prepare value-free infrastructure report
+        if: inputs.infrastructure_review && github.event_name == 'pull_request'
+        env:
+          PLAN_EXIT: ${{ steps.plan.outputs.exitcode }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          terraform show -json tfplan > "$RUNNER_TEMP/infrastructure-plan.json"
+          node ../policy-tools/tools/plan-report.mjs "$RUNNER_TEMP/infrastructure-plan.json" ../plan-report-infrastructure infrastructure "$PLAN_EXIT"
+          rm "$RUNNER_TEMP/infrastructure-plan.json"
+        working-directory: infrastructure
+
+      - name: Upload value-free infrastructure report
+        if: inputs.infrastructure_review && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: plan-report-infrastructure
+          path: plan-report-infrastructure/
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Upload Terraform plan
-        if: steps.plan.outputs.exitcode == 2
+        if: steps.plan.outputs.exitcode == 2 && github.event_name != 'pull_request'
         uses: actions/upload-artifact@v7
         with:
           name: tfplan-infrastructure
@@ -177,7 +219,7 @@ jobs:
     env:
       PGDATABASE: ${{ needs.prepare-postgres.outputs.DATABASE_NAME }}-infrastructure
     environment: production
-    needs: [prepare-postgres, infrastructure-terraform-plan]
+    needs: [build, prepare-postgres, infrastructure-terraform-plan]
     if: needs.infrastructure-terraform-plan.outputs.exitcode == 2 && github.event_name != 'pull_request'
     steps:
       - name: Expose GitHub environment as shell variables
@@ -216,7 +258,7 @@ jobs:
     needs: [build, prepare-postgres, infrastructure-terraform-plan, infrastructure-terraform-apply]
     steps:
       - name: fail if any previous step failed
-        if: needs.prepare-postgres.result == 'failure' || needs.infrastructure-terraform-plan.result == 'failure' || needs.infrastructure-terraform-apply.result == 'failure'
+        if: needs.build.result != 'success' || needs.prepare-postgres.result != 'success' || needs.infrastructure-terraform-plan.result != 'success' || needs.infrastructure-terraform-apply.result == 'failure'
         run: exit 1
 
       - name: Expose GitHub environment as shell variables
@@ -269,7 +311,6 @@ jobs:
       PGDATABASE: ${{ needs.prepare-postgres.outputs.DATABASE_NAME }}-service
     outputs:
       exitcode: ${{ steps.plan.outputs.exitcode }}
-      HAS_DOCKER_COMPOSE: ${{ steps.check-docker-compose.outputs.HAS_DOCKER_COMPOSE }}
     steps:
       - name: fail if any previous step failed
         if: needs.prepare-postgres.result == 'failure' || needs.deploy.result == 'failure'
@@ -290,6 +331,8 @@ jobs:
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
 
       - run: terraform version
 
@@ -308,33 +351,57 @@ jobs:
         id: plan
         continue-on-error: true
         run: | 
-          terraform plan -input=false --out=tfplan-service --detailed-exitcode
+          set +e
+          terraform plan -input=false --out=tfplan --detailed-exitcode
+          plan_exit=$?
+          echo "exitcode=$plan_exit" >> "$GITHUB_OUTPUT"
+          exit "$plan_exit"
         working-directory: service
 
       - name: Check if Terraform apply is required
+        env:
+          PLAN_EXIT: ${{ steps.plan.outputs.exitcode }}
         run: |
-          echo "exitcode: ${{ steps.plan.outputs.exitcode }}"
-          
-          if [ "${{ steps.plan.outputs.exitcode }}" == "1" ]; then
-            echo "Error running terraform; see logs above"
-            exit 1
-          fi
-          
-          if [ "${{ steps.plan.outputs.exitcode }}" == "0" ]; then
-            echo "Configuration files found but no changes; skipping apply"
-            exit 0
-          fi
-          
-          if grep -q "No configuration files" <<<"${{ steps.plan.outputs.stderr }}"; then
-            echo "No configuration files found; skipping apply"
-            exit 0
-          fi
-
-          echo "Configuration files found and changes; running apply"
+          case "$PLAN_EXIT" in
+            0) echo "No changes" ;;
+            2) echo "Changes detected" ;;
+            *) echo "Terraform plan failed or returned no exit code"; exit 1 ;;
+          esac
         working-directory: service
 
+      - name: Checkout trusted plan reporting tools
+        if: inputs.infrastructure_review && github.event_name == 'pull_request'
+        uses: actions/checkout@v6
+        with:
+          repository: mahn-ke/.github
+          ref: main
+          path: policy-tools
+          persist-credentials: false
+
+      - name: Prepare value-free service report
+        if: inputs.infrastructure_review && github.event_name == 'pull_request'
+        env:
+          PLAN_EXIT: ${{ steps.plan.outputs.exitcode }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          terraform show -json tfplan > "$RUNNER_TEMP/service-plan.json"
+          node ../policy-tools/tools/plan-report.mjs "$RUNNER_TEMP/service-plan.json" ../plan-report-service service "$PLAN_EXIT"
+          rm "$RUNNER_TEMP/service-plan.json"
+        working-directory: service
+
+      - name: Upload value-free service report
+        if: inputs.infrastructure_review && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: plan-report-service
+          path: plan-report-service/
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Upload Terraform plan
-        if: steps.plan.outputs.exitcode == 2
+        if: steps.plan.outputs.exitcode == 2 && github.event_name != 'pull_request'
         uses: actions/upload-artifact@v7
         with:
           name: tfplan-service
@@ -346,7 +413,7 @@ jobs:
       PGDATABASE: ${{ needs.prepare-postgres.outputs.DATABASE_NAME }}-service
     environment: production
     needs: [prepare-postgres, service-terraform-plan, deploy]
-    if: needs.service-terraform-plan.outputs.exitcode == 2
+    if: needs.service-terraform-plan.outputs.exitcode == 2 && github.event_name != 'pull_request'
     steps:
       - name: Expose GitHub environment as shell variables
         env:
