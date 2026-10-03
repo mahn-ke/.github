@@ -150,7 +150,7 @@ jobs:
         continue-on-error: true
         run: | 
           set +e
-          terraform plan -input=false --out=tfplan --detailed-exitcode
+          terraform plan -input=false -lock-timeout=5m --out=tfplan --detailed-exitcode
           plan_exit=$?
           echo "exitcode=$plan_exit" >> "$GITHUB_OUTPUT"
           exit "$plan_exit"
@@ -360,7 +360,7 @@ jobs:
         continue-on-error: true
         run: | 
           set +e
-          terraform plan -input=false --out=tfplan --detailed-exitcode
+          terraform plan -input=false -lock-timeout=5m --out=tfplan --detailed-exitcode
           plan_exit=$?
           echo "exitcode=$plan_exit" >> "$GITHUB_OUTPUT"
           exit "$plan_exit"
