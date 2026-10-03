@@ -105,6 +105,9 @@ jobs:
           done
 
   infrastructure-terraform-plan:
+    concurrency:
+      group: ${{ github.repository }}-infrastructure-state
+      cancel-in-progress: false
     needs: prepare-postgres
     runs-on: ubuntu-latest
     env:
@@ -133,8 +136,18 @@ jobs:
 
       - run: terraform version
 
+      - name: Prepare protected generated configuration branch
+        if: github.repository == 'mahn-ke/repos' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && hashFiles('tools/generated-config-delivery.mjs') != ''
+        run: node tools/generated-config-delivery.mjs prepare
+        env:
+          GH_TOKEN: ${{ secrets.TF_VAR_GITHUB_PAT }}
+
       - run: terraform init -upgrade
         working-directory: infrastructure
+
+      - name: Check protected generated-file state adoption
+        if: github.repository == 'mahn-ke/repos' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && hashFiles('tools/generated-config-delivery.mjs') != ''
+        run: node tools/generated-config-delivery.mjs assert-state
 
       - name: exit if terraform fmt is not clean
         run: |
@@ -170,6 +183,12 @@ jobs:
       - name: No Terraform changes
         if: steps.plan.outputs.exitcode == '0'
         run: echo No changes
+
+      - name: Publish unchanged staged configuration PR
+        if: github.repository == 'mahn-ke/repos' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.plan.outputs.exitcode == '0' && hashFiles('tools/generated-config-delivery.mjs') != ''
+        run: node tools/generated-config-delivery.mjs publish
+        env:
+          GH_TOKEN: ${{ secrets.TF_VAR_GITHUB_PAT }}
 
       - name: Terraform changes detected
         if: steps.plan.outputs.exitcode == '2'
@@ -225,6 +244,9 @@ jobs:
           echo "HAS_DOCKER_COMPOSE=true" >> $GITHUB_OUTPUT
 
   infrastructure-terraform-apply:
+    concurrency:
+      group: ${{ github.repository }}-infrastructure-state
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     env:
       PGDATABASE: ${{ needs.prepare-postgres.outputs.DATABASE_NAME }}-infrastructure
@@ -261,6 +283,12 @@ jobs:
 
       - run: terraform apply -input=false -auto-approve tfplan
         working-directory: infrastructure
+
+      - name: Publish protected generated configuration PR
+        if: github.repository == 'mahn-ke/repos' && github.ref == 'refs/heads/main' && hashFiles('tools/generated-config-delivery.mjs') != ''
+        run: node tools/generated-config-delivery.mjs publish
+        env:
+          GH_TOKEN: ${{ secrets.TF_VAR_GITHUB_PAT }}
 
   deploy:
     runs-on: hetzner2
