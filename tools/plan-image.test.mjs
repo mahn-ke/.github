@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, existsSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createPlanImage } from './plan-image.mjs';
@@ -35,6 +35,12 @@ test('changed plans hand only value-free data to renderer on PR and main revisio
           assert.equal(output, `${directory}/infrastructure.png`);
         },
       }), true);
+      const metadata = JSON.parse(readFileSync(`${directory}/report.json`, 'utf8'));
+      assert.equal(metadata.headSha, context.headSha);
+      assert.equal(metadata.baseSha, baseSha);
+      assert.equal(metadata.runId, context.runId);
+      assert.equal(metadata.runAttempt, context.runAttempt);
+      assert.ok(!JSON.stringify(metadata).includes('SECRET_CANARY'));
     }
     assert.throws(() => createPlanImage(plan, { ...context, exitcode: 1 }, directory));
   } finally { rmSync(directory, { recursive: true, force: true }); }

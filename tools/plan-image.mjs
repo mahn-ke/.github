@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createReport } from './plan-report.mjs';
@@ -10,6 +10,7 @@ export function createPlanImage(plan, context, output, renderer = { buildPonto, 
   mkdirSync(output, { recursive: true });
   renderer.buildPonto();
   renderer.renderPlan(sanitized, report, `${output}/${context.root}.png`);
+  writeFileSync(`${output}/report.json`, JSON.stringify(report));
   return true;
 }
 
