@@ -8,55 +8,66 @@ function fixture(changed = false) {
       head: { sha: 'a'.repeat(40), ref: 'renovate/example', repo: { full_name: 'owner/repo' } },
       base: { sha: 'b'.repeat(40), repo: { full_name: 'owner/repo' } } },
     run: { id: 123, event: 'pull_request', head_sha: 'a'.repeat(40), status: 'completed', conclusion: 'success' },
-    jobs: requiredJobs.map(name => ({ name, conclusion: 'success' })),
-    reports: ['infrastructure', 'service'].map(root => ({ version: 1, root,
-      digest: 'd'.repeat(64), headSha: 'a'.repeat(40), baseSha: 'b'.repeat(40),
-      runId: '123', runAttempt: '1', exitcode: changed ? 2 : 0, resources: [], outputChanges: changed ? 1 : 0 })),
-    reviews: [], reviewers: ['maintainer'],
+    jobs: requiredJobs.map(name => ({ name, conclusion: 'success',
+      steps: [{ name: changed ? 'Terraform changes detected' : 'No Terraform changes', conclusion: 'success' }] })),
   };
 }
-test('green no-change plans permit only scoped Renovate automerge', () => {
-  const input = fixture();
-  assert.equal(evaluatePolicy(input).automerge, true);
-  input.pr.head.ref = 'feature/other';
-  assert.equal(evaluatePolicy(input).automerge, false);
-});
-test('any change blocks automerge even after current digest approval', () => {
-  const input = fixture(true);
-  const result = evaluatePolicy(input);
-  assert.equal(result.allowed, false);
-  input.reviews = [{ id: 1, state: 'APPROVED', user: { login: 'maintainer', type: 'User' },
-    commit_id: input.pr.head.sha, body: `Approve infrastructure plan ${result.digest}` }];
-  assert.equal(evaluatePolicy(input).allowed, true);
-  assert.equal(evaluatePolicy(input).automerge, false);
-  input.reports[0].digest = 'e'.repeat(64);
-  assert.equal(evaluatePolicy(input).allowed, false);
-});
-test('failed, skipped, cancelled, missing or stale evidence blocks', () => {
-  for (const conclusion of ['failure', 'skipped', 'cancelled', undefined]) {
+test('green no-change plans permit only scoped same-repository Renovate automerge', () => {
+  assert.deepEqual(evaluatePolicy(fixture()), { allowed: true, changed: false, automerge: true });
+  for (const mutate of [input => { input.pr.head.ref = 'feature/other'; },
+    input => { input.pr.labels = []; },
+    input => { input.pr.head.repo.full_name = 'fork/repo'; },
+    input => { input.pr.head.repo = null; }]) {
     const input = fixture();
-    input.jobs[0].conclusion = conclusion;
+    mutate(input);
+    assert.equal(evaluatePolicy(input).automerge, false);
+  }
+});
+test('either changed plan allows manual merge without reviews and disables automerge', () => {
+  for (const index of [2, 3]) {
+    const input = fixture();
+    input.jobs[index].steps = [{ name: 'Terraform changes detected', conclusion: 'success' }];
+    assert.deepEqual(evaluatePolicy(input), { allowed: true, changed: true, automerge: false });
+  }
+  assert.deepEqual(evaluatePolicy(fixture(true)), { allowed: true, changed: true, automerge: false });
+});
+test('failed, skipped, cancelled or missing required jobs block', () => {
+  for (const index of requiredJobs.keys()) {
+    for (const conclusion of ['failure', 'skipped', 'cancelled', undefined]) {
+      const input = fixture();
+      input.jobs[index].conclusion = conclusion;
+      assert.throws(() => evaluatePolicy(input));
+    }
+    const input = fixture();
+    input.jobs.splice(index, 1);
     assert.throws(() => evaluatePolicy(input));
   }
-  const input = fixture();
-  input.reports[0].baseSha = 'c'.repeat(40);
-  assert.throws(() => evaluatePolicy(input));
-  assert.throws(() => evaluatePolicy({ ...fixture(), reports: [] }));
-  assert.throws(() => evaluatePolicy({ ...fixture(), run: { ...fixture().run, run_attempt: 2 } }));
-  assert.throws(() => evaluatePolicy({ ...fixture(), run: { ...fixture().run, status: 'in_progress' } }));
 });
-test('stale, unauthorized, dismissed and changes-requested reviews do not approve', () => {
-  const input = fixture(true);
-  const digest = evaluatePolicy(input).digest;
-  const approval = { id: 1, state: 'APPROVED', user: { login: 'maintainer', type: 'User' },
-    commit_id: input.pr.head.sha, body: `Approve infrastructure plan ${digest}` };
-  for (const review of [{ ...approval, commit_id: 'c'.repeat(40) },
-    { ...approval, user: { login: 'stranger', type: 'User' } },
-    { ...approval, user: { login: 'maintainer', type: 'Bot' } },
-    { ...approval, state: 'DISMISSED' }]) {
-    input.reviews = [review];
-    assert.equal(evaluatePolicy(input).allowed, false);
+test('plan markers must have one unambiguous successful outcome', () => {
+  for (const index of [2, 3]) {
+    for (const steps of [undefined, [],
+      [{ name: 'Unknown plan result', conclusion: 'success' }],
+      ...['failure', 'skipped', 'cancelled', undefined].flatMap(conclusion =>
+        ['No Terraform changes', 'Terraform changes detected'].map(name => [{ name, conclusion }])),
+      ['No Terraform changes', 'Terraform changes detected'].map(name => ({ name, conclusion: 'success' }))]) {
+      const input = fixture();
+      input.jobs[index].steps = steps;
+      assert.throws(() => evaluatePolicy(input));
+    }
+    const input = fixture();
+    input.jobs[index].steps.push({ name: 'Terraform changes detected', conclusion: 'skipped' });
+    assert.equal(evaluatePolicy(input).changed, false);
   }
-  input.reviews = [approval, { ...approval, id: 2, state: 'CHANGES_REQUESTED' }];
-  assert.equal(evaluatePolicy(input).allowed, false);
+});
+test('stale head, draft, closed PR and unsuccessful or non-PR runs block', () => {
+  for (const mutate of [input => { input.run.head_sha = 'stale'; },
+    input => { input.pr.draft = true; },
+    input => { input.pr.state = 'closed'; },
+    input => { input.run.status = 'in_progress'; },
+    input => { input.run.event = 'push'; },
+    ...['failure', 'skipped', 'cancelled', undefined].map(conclusion => input => { input.run.conclusion = conclusion; })]) {
+    const input = fixture();
+    mutate(input);
+    assert.throws(() => evaluatePolicy(input));
+  }
 });

@@ -71,6 +71,13 @@ export function createReport(plan, { root, exitcode, headSha, baseSha, runId, ru
     format_version: '1.2', terraform_version: plan.terraform_version,
     configuration: { root_module: configModule(plan.configuration.root_module) },
     resource_changes: changes,
+    output_changes: Object.fromEntries(Object.values(plan.output_changes || {})
+      .filter(change => change.actions?.some(action => action !== 'no-op'))
+      .map((change, index) => [`output_change_${index + 1}`, {
+        actions: change.actions,
+        before: change.before === null ? null : 'Value omitted',
+        after: change.after === null ? null : 'Value omitted',
+      }])),
   };
   return { report, sanitized };
 }

@@ -32,7 +32,7 @@ test('published plans contain no values, instance keys, sources, or output conte
   assert.deepEqual(result.sanitized.configuration.root_module.resources[0].expressions.password,
     { references: ['var.password'] });
 });
-test('output-only changes still require review', () => {
+test('output-only changes remain a non-empty plan', () => {
   const plan = fixture(['no-op']);
   assert.equal(createReport(plan, context).report.resources.length, 0);
   assert.equal(createReport(plan, context).report.exitcode, 2);

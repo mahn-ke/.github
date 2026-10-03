@@ -167,8 +167,16 @@ jobs:
           esac
         working-directory: infrastructure
 
+      - name: No Terraform changes
+        if: steps.plan.outputs.exitcode == '0'
+        run: echo No changes
+
+      - name: Terraform changes detected
+        if: steps.plan.outputs.exitcode == '2'
+        run: echo Changed plan requires production approval
+
       - name: Checkout trusted plan reporting tools
-        if: inputs.infrastructure_review && github.event_name == 'pull_request'
+        if: inputs.infrastructure_review && steps.plan.outputs.exitcode == '2'
         uses: actions/checkout@v6
         with:
           repository: mahn-ke/.github
@@ -176,24 +184,24 @@ jobs:
           path: policy-tools
           persist-credentials: false
 
-      - name: Prepare value-free infrastructure report
-        if: inputs.infrastructure_review && github.event_name == 'pull_request'
+      - name: Render infrastructure plan image
+        if: inputs.infrastructure_review && steps.plan.outputs.exitcode == '2'
         env:
           PLAN_EXIT: ${{ steps.plan.outputs.exitcode }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PLAN_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PLAN_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
         run: |
+          trap 'rm -f "$RUNNER_TEMP/infrastructure-plan.json"' EXIT
           terraform show -json tfplan > "$RUNNER_TEMP/infrastructure-plan.json"
-          node ../policy-tools/tools/plan-report.mjs "$RUNNER_TEMP/infrastructure-plan.json" ../plan-report-infrastructure infrastructure "$PLAN_EXIT"
-          rm "$RUNNER_TEMP/infrastructure-plan.json"
+          node ../policy-tools/tools/plan-image.mjs "$RUNNER_TEMP/infrastructure-plan.json" ../plan-images-infrastructure infrastructure "$PLAN_EXIT"
         working-directory: infrastructure
 
-      - name: Upload value-free infrastructure report
-        if: inputs.infrastructure_review && github.event_name == 'pull_request'
+      - name: Upload infrastructure plan image
+        if: inputs.infrastructure_review && steps.plan.outputs.exitcode == '2'
         uses: actions/upload-artifact@v7
         with:
-          name: plan-report-infrastructure
-          path: plan-report-infrastructure/
+          name: terraform-plan-image-infrastructure
+          path: plan-images-infrastructure/infrastructure.png
           overwrite: true
           if-no-files-found: error
           retention-days: 7
@@ -369,8 +377,16 @@ jobs:
           esac
         working-directory: service
 
+      - name: No Terraform changes
+        if: steps.plan.outputs.exitcode == '0'
+        run: echo No changes
+
+      - name: Terraform changes detected
+        if: steps.plan.outputs.exitcode == '2'
+        run: echo Changed plan requires production approval
+
       - name: Checkout trusted plan reporting tools
-        if: inputs.infrastructure_review && github.event_name == 'pull_request'
+        if: inputs.infrastructure_review && steps.plan.outputs.exitcode == '2'
         uses: actions/checkout@v6
         with:
           repository: mahn-ke/.github
@@ -378,24 +394,24 @@ jobs:
           path: policy-tools
           persist-credentials: false
 
-      - name: Prepare value-free service report
-        if: inputs.infrastructure_review && github.event_name == 'pull_request'
+      - name: Render service plan image
+        if: inputs.infrastructure_review && steps.plan.outputs.exitcode == '2'
         env:
           PLAN_EXIT: ${{ steps.plan.outputs.exitcode }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PLAN_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PLAN_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
         run: |
+          trap 'rm -f "$RUNNER_TEMP/service-plan.json"' EXIT
           terraform show -json tfplan > "$RUNNER_TEMP/service-plan.json"
-          node ../policy-tools/tools/plan-report.mjs "$RUNNER_TEMP/service-plan.json" ../plan-report-service service "$PLAN_EXIT"
-          rm "$RUNNER_TEMP/service-plan.json"
+          node ../policy-tools/tools/plan-image.mjs "$RUNNER_TEMP/service-plan.json" ../plan-images-service service "$PLAN_EXIT"
         working-directory: service
 
-      - name: Upload value-free service report
-        if: inputs.infrastructure_review && github.event_name == 'pull_request'
+      - name: Upload service plan image
+        if: inputs.infrastructure_review && steps.plan.outputs.exitcode == '2'
         uses: actions/upload-artifact@v7
         with:
-          name: plan-report-service
-          path: plan-report-service/
+          name: terraform-plan-image-service
+          path: plan-images-service/service.png
           overwrite: true
           if-no-files-found: error
           retention-days: 7
