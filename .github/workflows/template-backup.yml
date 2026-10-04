@@ -116,7 +116,7 @@ jobs:
 
       - run: |
           Write-Host "Checking for volumes and mounts in docker-compose.yml..."
-          docker compose config | Out-File -FilePath config.yml -Encoding utf8
+          docker compose config --no-interpolate | Out-File -FilePath config.yml -Encoding utf8
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $mappings = docker run --rm -v "${PWD}:/workdir" mikefarah/yq ".services[].volumes[].source" config.yml
@@ -154,7 +154,7 @@ jobs:
               continue
             }
             Write-Host "Backing up mount '$mount':"
-            restic backup "$mount" --skip-if-unchanged
+            restic backup "$mount" --skip-if-unchanged --tag $($env:INPUT_TAGS)
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
         shell: pwsh
