@@ -39,3 +39,20 @@ jobs:
           RENOVATE_AUTODISCOVER_FILTER: ${{ inputs.repositories || 'mahn-ke/*' }}
           RENOVATE_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'full' || '' }}
           RENOVATE_ALLOWED_COMMANDS: '["^terraform -chdir=(infrastructure|service) init -backend=false -upgrade$"]'
+
+      - name: Test fleet overview
+        if: ${{ always() && !cancelled() }}
+        run: node --test tools/renovate-overview.test.mjs
+
+      - name: Refresh fleet overview
+        if: ${{ always() && !cancelled() }}
+        env:
+          GH_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+          OVERVIEW_REPOSITORY: mahn-ke/.github
+          OVERVIEW_PREVIEW: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          if [[ "$OVERVIEW_PREVIEW" == "true" ]]; then
+            node tools/renovate-overview.mjs --preview
+          else
+            node tools/renovate-overview.mjs
+          fi
