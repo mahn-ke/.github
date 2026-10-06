@@ -116,16 +116,17 @@ jobs:
 
       - run: |
           Write-Host "Checking for volumes and mounts in docker-compose.yml..."
-          docker compose config --no-interpolate | Out-File -FilePath config.yml -Encoding utf8
+          $configJson = docker compose config --format json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          $mappings = docker run --rm -v "${PWD}:/workdir" mikefarah/yq ".services[].volumes[].source" config.yml
-          $unique_mappings = $mappings | Sort-Object | Get-Unique | Where-Object {
-            $driver = docker run --rm -v "${PWD}:/workdir" mikefarah/yq ".volumes.$_.driver" config.yml
-            $driver -ne 'fentas/davfs'
+          $config = ($configJson -join "`n") | ConvertFrom-Json
+          $mappings = @($config.services.PSObject.Properties.Value | ForEach-Object { $_.volumes })
+          $volumes = $mappings | Where-Object { $_.type -eq 'volume' -and $_.source } |
+            Select-Object -ExpandProperty source -Unique | Where-Object {
+              $config.volumes.PSObject.Properties[$_].Value.driver -ne 'fentas/davfs'
           }
-          $volumes = $unique_mappings | Where-Object { $_ -notmatch '[\\/]' }
-          $mounts = $unique_mappings | Where-Object { $_ -match '[\\/]' }
+          $mounts = $mappings | Where-Object { $_.type -eq 'bind' -and $_.source } |
+            Select-Object -ExpandProperty source -Unique
 
           Write-Host "Volumes to backup:`n$($volumes -join "`n")"
           Write-Host "Mounts to backup:`n$($mounts -join "`n")"
