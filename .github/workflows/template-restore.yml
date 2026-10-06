@@ -175,7 +175,7 @@ jobs:
         shell: pwsh
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Shut down docker compose
         env:

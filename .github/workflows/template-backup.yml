@@ -32,7 +32,7 @@ jobs:
           }
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Check if docker-compose.yml exists
         id: has-docker-compose
@@ -112,7 +112,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - run: |
           Write-Host "Checking for volumes and mounts in docker-compose.yml..."
