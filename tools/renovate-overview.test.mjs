@@ -11,8 +11,8 @@ test('extracts approvals and problems without the approve-all checkbox', () => {
 
 test('renders tables by approvals descending then name and escapes delimiters', () => {
   const body = renderOverview([
-    { name: 'zeta', url: 'https://github.com/org/zeta', dashboard: undefined, pending: [], prs: [], problems: [] },
-    { name: 'beta', url: 'https://github.com/org/beta', dashboard: undefined, pending: [], prs: [], problems: [] },
+    { name: 'zeta', url: 'https://github.com/org/zeta', dashboard: undefined, pending: [], prs: [], problems: ['Registry failed'] },
+    { name: 'beta', url: 'https://github.com/org/beta', dashboard: undefined, pending: [], prs: [{ title: 'Patch image', html_url: 'https://github.com/org/beta/pull/2' }], problems: [] },
     { name: 'omega', url: 'https://github.com/org/omega', dashboard: 'https://github.com/org/omega/issues/1',
       pending: [{ title: 'Upgrade first' }, { title: 'Upgrade second' }], prs: [], problems: [] },
     { name: 'alpha', url: 'https://github.com/org/alpha', dashboard: 'https://github.com/org/alpha/issues/1',
@@ -26,6 +26,20 @@ test('renders tables by approvals descending then name and escapes delimiters', 
   assert.ok(body.includes('No dashboard'));
   assert.ok(body.includes('[Approve](https://github.com/org/alpha/issues/1)'));
   assert.ok(!body.includes('- [ ]'));
+});
+
+test('omits repositories with no problems, approvals, or Renovate PRs', () => {
+  const rows = [
+    { name: 'clean', url: 'https://github.com/org/clean', dashboard: 'https://github.com/org/clean/issues/1', pending: [], prs: [], problems: [] },
+    { name: 'missing-dashboard', url: 'https://github.com/org/missing-dashboard', dashboard: undefined, pending: [], prs: [], problems: [] },
+  ];
+  const body = renderOverview(rows);
+  assert.ok(!body.includes('https://github.com/org/clean'));
+  assert.ok(!body.includes('missing-dashboard'));
+  assert.ok(body.includes('No pending approvals'));
+  assert.ok(body.includes('No open Renovate pull requests'));
+  assert.ok(body.includes('No problems reported by the repository dashboards.'));
+  assert.equal(rows.length, 2);
 });
 
 test('updates only an overview identified by its marker', async () => {

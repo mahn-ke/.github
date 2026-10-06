@@ -24,7 +24,8 @@ function cell(value) {
 }
 
 export function renderOverview(rows, { now = new Date(), runUrl } = {}) {
-  const sorted = [...rows].sort((left, right) => right.pending.length - left.pending.length || left.name.localeCompare(right.name));
+  const sorted = rows.filter(row => row.problems.length || row.pending.length || row.prs.length)
+    .sort((left, right) => right.pending.length - left.pending.length || left.name.localeCompare(right.name));
   const lines = [marker, '# Renovate Fleet Overview', '',
     `Updated: ${now.toISOString()}${runUrl ? ` | [Renovate run](${runUrl})` : ''}`, '',
     'Approvals remain on the native repository dashboards. This overview does not approve or merge updates.', '',
