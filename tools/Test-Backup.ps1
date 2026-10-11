@@ -19,7 +19,7 @@ function docker {
     $Arguments = @($args)
     $global:LASTEXITCODE = 0
     if ($Arguments[0] -eq 'compose') {
-        if (($Arguments -join ' ') -ne 'compose config --format json') {
+        if (($Arguments -join ' ') -ne 'compose config --no-interpolate --format json') {
             throw "Unexpected Compose invocation: $Arguments"
         }
         return $script:config | ConvertTo-Json -Depth 20

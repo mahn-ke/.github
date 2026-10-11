@@ -116,7 +116,7 @@ jobs:
 
       - run: |
           Write-Host "Checking for volumes and mounts in docker-compose.yml..."
-          $configJson = docker compose config --format json
+          $configJson = docker compose config --no-interpolate --format json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $config = ($configJson -join "`n") | ConvertFrom-Json
