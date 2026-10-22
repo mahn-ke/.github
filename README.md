@@ -20,13 +20,16 @@ Instead of createing a new repository, add the name of the project to the approp
      ```
 3. Commit and push the changes to the repository; it will be avaialble at `https://xyz.by.vincent.mahn.ke`
 
-### Built-image deployment canary
+### Built-image digest deployment
 
-Only `mahn-ke/crop-by-vincent` currently uses build-digest handoff. All other
-repositories keep their existing build and deployment behavior until rollout
-is approved.
+Repositories opt into build-digest handoff with the repository Actions variable
+`DEPLOY_BUILT_IMAGE=true`. Enable and verify one repository at a time.
+Repositories without this exact value keep their existing build and deployment
+behavior. The build job passes the selected mode to deployment so both jobs
+use the same path. Removing the variable restores the legacy path, including
+the checked-in Compose pin.
 
-For the canary, the image push returns its registry digest directly to the
+For enabled repositories, the image push returns its registry digest directly to the
 deployment job. The job replaces only image-backed services referencing
 `ghcr.io/<current-repository>` with that exact `@sha256:...` reference.
 Third-party images, other repositories' images, and services with `build:`
