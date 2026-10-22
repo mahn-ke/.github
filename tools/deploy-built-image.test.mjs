@@ -110,20 +110,27 @@ test('missing metadata or invalid Compose fails before creating release files', 
   assert.deepEqual(readdirSync(output), []);
 });
 
-test('workflow gates all changed build/deploy paths to crop and preserves PR push guard', () => {
+test('workflow gates digest deployment to repository opt-ins and preserves PR push guard', () => {
   const workflow = readFileSync(new URL('../.github/workflows/template-deploy.yml', import.meta.url), 'utf8')
     .replaceAll('\r\n', '\n');
-  for (const name of ['Build Docker image', 'Push Docker image', 'Run Docker Compose']) {
+  for (const name of ['Build Docker image', 'Push Docker image']) {
     const block = workflow.split(`- name: ${name}\n`)[1].split('\n      - name:')[0];
-    assert.match(block, /github.repository != 'mahn-ke\/crop-by-vincent'/);
+    assert.match(block, /vars.DEPLOY_BUILT_IMAGE != 'true'/);
   }
-  for (const name of ['Set up canary image builder', 'Build and optionally push canary image',
-    'Set up canary deployment runtime', 'Deploy and verify the current build digest', 'Archive canary image release']) {
+  for (const name of ['Set up digest image builder', 'Build and optionally push digest image']) {
     const block = workflow.split(`- name: ${name}\n`)[1].split('\n      - name:')[0];
-    assert.match(block, /github.repository == 'mahn-ke\/crop-by-vincent'/);
+    assert.match(block, /vars.DEPLOY_BUILT_IMAGE == 'true'/);
+  }
+  const legacyDeploy = workflow.split('- name: Run Docker Compose\n')[1].split('\n      - name:')[0];
+  assert.match(legacyDeploy, /needs.build.outputs.digest_deployment != 'true'/);
+  for (const name of ['Set up digest deployment runtime', 'Deploy and verify the current build digest',
+    'Archive image release']) {
+    const block = workflow.split(`- name: ${name}\n`)[1].split('\n      - name:')[0];
+    assert.match(block, /needs.build.outputs.digest_deployment == 'true'/);
   }
   assert.match(workflow, /push: \$\{\{ github.event_name != 'pull_request' \}\}/);
   assert.match(workflow, /image_digest: \$\{\{ steps.build_image.outputs.digest \}\}/);
+  assert.match(workflow, /digest_deployment: \$\{\{ vars.DEPLOY_BUILT_IMAGE \}\}/);
   assert.match(workflow, /BUILT_IMAGE_DIGEST: \$\{\{ needs.build.outputs.image_digest \}\}/);
 });
 
