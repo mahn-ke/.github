@@ -19,6 +19,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      image_digest: ${{ steps.build_image.outputs.digest }}
     permissions:
       contents: read
       packages: write
@@ -51,16 +53,29 @@ jobs:
         working-directory: app
 
       - name: Build Docker image
-        if: steps.check_dockerfile.outputs.exists == 'true'
+        if: steps.check_dockerfile.outputs.exists == 'true' && github.repository != 'mahn-ke/crop-by-vincent'
         run: |
           docker build -t ghcr.io/${{ github.repository }}:latest .
         working-directory: app
 
       - name: Push Docker image
-        if: steps.check_dockerfile.outputs.exists == 'true' && github.event_name != 'pull_request'
+        if: steps.check_dockerfile.outputs.exists == 'true' && github.event_name != 'pull_request' && github.repository != 'mahn-ke/crop-by-vincent'
         run: |
           docker push ghcr.io/${{ github.repository }}:latest
         working-directory: app
+
+      - name: Set up canary image builder
+        if: steps.check_dockerfile.outputs.exists == 'true' && github.repository == 'mahn-ke/crop-by-vincent'
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and optionally push canary image
+        id: build_image
+        if: steps.check_dockerfile.outputs.exists == 'true' && github.repository == 'mahn-ke/crop-by-vincent'
+        uses: docker/build-push-action@v7
+        with:
+          context: app
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ghcr.io/${{ github.repository }}:latest
 
   prepare-postgres:
     runs-on: ubuntu-latest
@@ -331,10 +346,34 @@ jobs:
         working-directory: src
 
       - name: Run Docker Compose
+        if: github.repository != 'mahn-ke/crop-by-vincent'
         env:
           COMPOSE_PROJECT_NAME: ${{ needs.prepare-postgres.outputs.PROJECT_NAME }}
         run: docker compose up -d --wait --pull always
         working-directory: src
+
+      - name: Set up canary deployment runtime
+        if: github.repository == 'mahn-ke/crop-by-vincent'
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Deploy and verify the current build digest
+        if: github.repository == 'mahn-ke/crop-by-vincent'
+        env:
+          COMPOSE_PROJECT_NAME: ${{ needs.prepare-postgres.outputs.PROJECT_NAME }}
+          BUILT_IMAGE_DIGEST: ${{ needs.build.outputs.image_digest }}
+          RELEASE_DIR: ${{ runner.temp }}/image-release-${{ github.run_id }}-${{ github.run_attempt }}
+        run: node ../workflow/tools/deploy-built-image.mjs
+        working-directory: src
+
+      - name: Archive canary image release
+        if: always() && github.repository == 'mahn-ke/crop-by-vincent'
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-release-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/image-release-${{ github.run_id }}-${{ github.run_attempt }}/*.json
+          retention-days: 90
 
       - name: Attempt subdomain deployment, if required
         run: ../workflow/tools/Deploy.ps1

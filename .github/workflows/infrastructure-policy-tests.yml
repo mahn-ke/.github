@@ -2,9 +2,9 @@ name: Test infrastructure policy helpers
 
 on:
   push:
-    paths: ['tools/*.mjs', '.github/workflows/infrastructure-policy-tests.yml']
+    paths: ['tools/*.mjs', '.github/workflows/infrastructure-policy-tests.yml', '.github/workflows/template-deploy.yml']
   pull_request:
-    paths: ['tools/*.mjs', '.github/workflows/infrastructure-policy-tests.yml']
+    paths: ['tools/*.mjs', '.github/workflows/infrastructure-policy-tests.yml', '.github/workflows/template-deploy.yml']
   workflow_dispatch:
 
 permissions:
@@ -20,6 +20,19 @@ jobs:
           node-version: 24
       - run: node --test tools/*.test.mjs
         working-directory: .
+  image-deployment:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: node --test tools/deploy-built-image.test.mjs
+        env:
+          TEST_COMPOSE: 'true'
   graph-smoke-test:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
