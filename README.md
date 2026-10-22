@@ -20,6 +20,48 @@ Instead of createing a new repository, add the name of the project to the approp
      ```
 3. Commit and push the changes to the repository; it will be avaialble at `https://xyz.by.vincent.mahn.ke`
 
+### Built-image deployment canary
+
+Only `mahn-ke/crop-by-vincent` currently uses build-digest handoff. All other
+repositories keep their existing build and deployment behavior until rollout
+is approved.
+
+For the canary, the image push returns its registry digest directly to the
+deployment job. The job replaces only image-backed services referencing
+`ghcr.io/<current-repository>` with that exact `@sha256:...` reference.
+Third-party images, other repositories' images, and services with `build:`
+are not replaced. Missing digests or no matching services fail deployment.
+Pull requests build but never push or deploy.
+
+The helper resolves the existing Compose file stack, including default
+overrides and `COMPOSE_FILE`, in memory, then supplies it through stdin with
+an image-only override appended last. The base file and its routing comments
+remain untouched. Rendered configuration can contain secrets and is never
+saved or uploaded. Each run uses a distinct temporary output directory.
+
+After `up --wait`, the helper checks the affected containers' image identity,
+running state, and health (when configured). The `image-release-<attempt>`
+artifact contains only `release.json` and `compose.image-override.json`.
+The manifest records the source commit, workflow run/attempt, image digest,
+services, and `pending`, `failed`, or `verified` status. A verified image
+deployment does not imply later routing or Terraform steps succeeded; check
+the complete workflow result as well. Artifacts are retained for 90 days,
+subject to repository/organization limits.
+
+The checked-in self-image pin is a fallback, **not the current production
+release record** for enabled repositories. To replay a release, check out
+its source commit and apply the downloaded image override after the normal
+Compose files, using the same project name and production environment:
+`docker compose -f docker-compose.yml -f compose.image-override.json up -d --wait --pull always`.
+Include any normal additional Compose overrides before the image override.
+The archived image must still exist in the registry. Re-running the build
+workflow rebuilds the source; it is not an exact-digest rollback.
+
+Existing workflow cancellation remains in effect: digest handoff prevents
+another build moving `latest` from changing this run's selected image, but
+does not provide transactional rollback. Existing Renovate self-image pin
+updates are unchanged; disabling redundant updates is a separate decision.
+
 ### Terraform
 
 1. Place `.tf` files in `/infrastructure/` for resource to deploy before `docker compose up` gets called
