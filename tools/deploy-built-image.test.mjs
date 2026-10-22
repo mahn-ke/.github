@@ -111,7 +111,8 @@ test('missing metadata or invalid Compose fails before creating release files', 
 });
 
 test('workflow gates all changed build/deploy paths to crop and preserves PR push guard', () => {
-  const workflow = readFileSync(new URL('../.github/workflows/template-deploy.yml', import.meta.url), 'utf8');
+  const workflow = readFileSync(new URL('../.github/workflows/template-deploy.yml', import.meta.url), 'utf8')
+    .replaceAll('\r\n', '\n');
   for (const name of ['Build Docker image', 'Push Docker image', 'Run Docker Compose']) {
     const block = workflow.split(`- name: ${name}\n`)[1].split('\n      - name:')[0];
     assert.match(block, /github.repository != 'mahn-ke\/crop-by-vincent'/);
