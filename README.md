@@ -20,6 +20,40 @@ Instead of createing a new repository, add the name of the project to the approp
      ```
 3. Commit and push the changes to the repository; it will be avaialble at `https://xyz.by.vincent.mahn.ke`
 
+### Images containing service configuration
+
+Containers must not bind-mount code or static configuration from the Actions
+checkout on Hetzner2. The checkout is temporary; Docker may need those paths again
+when restarting a container. Put static files in a Dockerfile with `COPY` instead.
+Keep persistent data in named volumes and supply secrets at runtime.
+
+Repositories can define a `docker-bake.hcl` with a `default` group for additional
+images, such as NGINX, Redis configuration, or plugins. Each target must specify
+its build context, `linux/amd64` platform, a tag under
+`ghcr.io/mahn-ke/<repository>/<service>:latest`, and an
+`org.opencontainers.image.source` label linking to the repository. Compose must
+reference the same tags without the old configuration bind mounts.
+
+The shared build job checks out submodules, builds these targets with Buildx,
+and pushes them using the repository's `GITHUB_TOKEN` before deployment.
+Pull requests build/load locally but never push or deploy. This also works for
+repositories without `app/Dockerfile`. The deployment job authenticates to GHCR
+to pull the new packages, including private packages linked to the repository.
+These additional images use `latest`; the opt-in digest handoff below still
+applies only to the main repository image, not the additional images.
+
+For initial rollout, update this shared workflow first, then deploy each affected
+repository once to publish its images and recreate its containers without the
+bind mounts. Restarting the old containers alone does not change their mounts.
+After that deployment, restarting them no longer needs the runner checkout.
+Recreating a stack still requires its Compose configuration and runtime secrets.
+
+To build additional images locally without pushing:
+
+```sh
+docker buildx bake --file docker-bake.hcl --load
+```
+
 ### Built-image digest deployment
 
 Repositories opt into build-digest handoff with the repository Actions variable

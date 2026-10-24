@@ -134,6 +134,24 @@ test('workflow gates digest deployment to repository opt-ins and preserves PR pu
   assert.match(workflow, /BUILT_IMAGE_DIGEST: \$\{\{ needs.build.outputs.image_digest \}\}/);
 });
 
+test('configuration images publish before deployment without pushing from pull requests', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/template-deploy.yml', import.meta.url), 'utf8')
+    .replaceAll('\r\n', '\n');
+  const build = workflow.split('  build:\n')[1].split('\n  prepare-postgres:')[0];
+  assert.match(build, /submodules: recursive/);
+  const login = build.split('- name: Log in to GitHub Container Registry\n')[1].split('\n      - name:')[0];
+  assert.match(login, /hashFiles\('docker-bake.hcl'\)/);
+  assert.match(login, /github.event_name != 'pull_request'/);
+  const bake = build.split('- name: Build configuration images\n')[1];
+  assert.match(bake, /if: hashFiles\('docker-bake.hcl'\) != ''/);
+  assert.match(bake, /PUSH_IMAGES: \$\{\{ github.event_name != 'pull_request' \}\}/);
+  assert.match(bake, /if \[ "\$PUSH_IMAGES" = "true" \]; then\s+docker buildx bake --file docker-bake.hcl --push\s+else\s+docker buildx bake --file docker-bake.hcl --load/);
+  const deploy = workflow.split('  deploy:\n')[1].split('\n  service-terraform-plan:')[0];
+  assert.match(deploy, /packages: read/);
+  assert.match(deploy, /needs: \[build,/);
+  assert.ok(deploy.indexOf('uses: docker/login-action@v4') < deploy.indexOf('- name: Run Docker Compose'));
+});
+
 for (const selection of ['default overrides', 'COMPOSE_FILE from .env']) {
 test(`real Compose preserves ${selection}, paths and secrets with the image-only override`,
   { skip: process.env.TEST_COMPOSE !== 'true' }, t => {
