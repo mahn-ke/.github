@@ -82,6 +82,30 @@ Write-Host 'PASS: named volumes, driver exclusions, deduplication, anonymous vol
 
 $script:dockerCalls.Clear()
 $script:resticCalls.Clear()
+# Actual --no-interpolate output for fah-break: no top-level volumes, variable bind source reported as a volume
+$env:NGINX_HOME = 'C:\nginx home'
+$script:config = @{
+    services = @{ app = @{ volumes = @(
+        @{ type = 'volume'; source = '${NGINX_HOME}/logs'; target = '/mnt/nginx-logs'; volume = @{} }
+    ) } }
+}
+& $backupScript
+Assert-Equal $script:dockerCalls.Count 0
+Assert-Equal $script:resticCalls.Count 1
+Assert-Equal $script:resticCalls[0][1] 'C:\nginx home/logs'
+Write-Host 'PASS: variable bind sources resolve from the runner environment without top-level volumes'
+
+$script:dockerCalls.Clear()
+$script:resticCalls.Clear()
+Remove-Item Env:NGINX_HOME
+$failed = $false
+try { & $backupScript } catch { $failed = $_.Exception.Message -like '*NGINX_HOME is not set*' }
+Assert-Equal $failed $true
+Assert-Equal $script:resticCalls.Count 0
+Write-Host 'PASS: unresolvable variable bind sources fail instead of being skipped'
+
+$script:dockerCalls.Clear()
+$script:resticCalls.Clear()
 $script:config = @{ services = @{ app = @{} } }
 & $backupScript
 Assert-Equal $script:dockerCalls.Count 0
