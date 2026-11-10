@@ -118,9 +118,18 @@ jobs:
           PROJECT_NAME="$(echo "$REPO_NAME" | sed 's/-by-vincent//')"
           echo "PROJECT_NAME=$PROJECT_NAME" >> $GITHUB_OUTPUT
 
+          # The state server intermittently drops connections while many deploys run at once
+          retry() {
+            for attempt in 1 2 3 4 5; do
+              "$@" && return 0
+              [ "$attempt" -lt 5 ] && { echo "::warning::$1 failed (attempt $attempt); retrying" >&2; sleep $((attempt * 10)); }
+            done
+            return 1
+          }
+
           for suffix in infrastructure service; do
             db="${DATABASE_NAME}-$suffix"
-            exists="$(psql -tAc "SELECT 1 FROM pg_database WHERE datname = '$db'")"
+            exists="$(retry psql -tAc "SELECT 1 FROM pg_database WHERE datname = '$db'")" || exit 1
             if [ "$exists" = "1" ]; then
               echo "Database '$db' already exists."
               continue
@@ -129,7 +138,7 @@ jobs:
               echo "Missing state database; PR validation must not create infrastructure."
               exit 1
             fi
-            createdb "$db"
+            retry createdb "$db"
             echo "Database '$db' created."
           done
 
@@ -171,7 +180,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.TF_VAR_GITHUB_PAT }}
 
-      - run: terraform init -upgrade
+      - name: terraform init
+        # The pg state backend intermittently drops connections while many deploys run at once
+        run: |
+          for attempt in 1 2 3 4; do
+            terraform init -upgrade -input=false && exit 0
+            [ "$attempt" -lt 4 ] && { echo "::warning::terraform init failed (attempt $attempt); retrying"; sleep $((attempt * 20)); }
+          done
+          exit 1
         working-directory: infrastructure
 
       - name: Check protected generated-file state adoption
@@ -192,8 +208,14 @@ jobs:
         continue-on-error: true
         run: | 
           set +e
-          terraform plan -input=false -lock-timeout=5m --out=tfplan --detailed-exitcode
-          plan_exit=$?
+          # Exit code 1 includes transient backend/provider connection errors; 0 and 2 are final
+          for attempt in 1 2 3; do
+            terraform plan -input=false -lock-timeout=5m --out=tfplan --detailed-exitcode
+            plan_exit=$?
+            [ "$plan_exit" -ne 1 ] || [ "$attempt" -eq 3 ] && break
+            echo "::warning::terraform plan failed (attempt $attempt); retrying"
+            sleep $((attempt * 30))
+          done
           echo "exitcode=$plan_exit" >> "$GITHUB_OUTPUT"
           exit "$plan_exit"
         working-directory: infrastructure
@@ -301,7 +323,14 @@ jobs:
 
       - run: terraform version
           
-      - run: terraform init -upgrade
+      - name: terraform init
+        # The pg state backend intermittently drops connections while many deploys run at once
+        run: |
+          for attempt in 1 2 3 4; do
+            terraform init -upgrade -input=false && exit 0
+            [ "$attempt" -lt 4 ] && { echo "::warning::terraform init failed (attempt $attempt); retrying"; sleep $((attempt * 20)); }
+          done
+          exit 1
         working-directory: infrastructure
 
       - name: Download Terraform plan
@@ -438,7 +467,14 @@ jobs:
 
       - run: terraform version
 
-      - run: terraform init -upgrade
+      - name: terraform init
+        # The pg state backend intermittently drops connections while many deploys run at once
+        run: |
+          for attempt in 1 2 3 4; do
+            terraform init -upgrade -input=false && exit 0
+            [ "$attempt" -lt 4 ] && { echo "::warning::terraform init failed (attempt $attempt); retrying"; sleep $((attempt * 20)); }
+          done
+          exit 1
         working-directory: service
 
       - name: exit if terraform fmt is not clean
@@ -454,8 +490,14 @@ jobs:
         continue-on-error: true
         run: | 
           set +e
-          terraform plan -input=false -lock-timeout=5m --out=tfplan --detailed-exitcode
-          plan_exit=$?
+          # Exit code 1 includes transient backend/provider connection errors; 0 and 2 are final
+          for attempt in 1 2 3; do
+            terraform plan -input=false -lock-timeout=5m --out=tfplan --detailed-exitcode
+            plan_exit=$?
+            [ "$plan_exit" -ne 1 ] || [ "$attempt" -eq 3 ] && break
+            echo "::warning::terraform plan failed (attempt $attempt); retrying"
+            sleep $((attempt * 30))
+          done
           echo "exitcode=$plan_exit" >> "$GITHUB_OUTPUT"
           exit "$plan_exit"
         working-directory: service
@@ -545,7 +587,14 @@ jobs:
 
       - run: terraform version
           
-      - run: terraform init -upgrade
+      - name: terraform init
+        # The pg state backend intermittently drops connections while many deploys run at once
+        run: |
+          for attempt in 1 2 3 4; do
+            terraform init -upgrade -input=false && exit 0
+            [ "$attempt" -lt 4 ] && { echo "::warning::terraform init failed (attempt $attempt); retrying"; sleep $((attempt * 20)); }
+          done
+          exit 1
         working-directory: service
 
       - name: Download Terraform plan

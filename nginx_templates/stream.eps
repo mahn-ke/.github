@@ -14,5 +14,7 @@ server {
 
     proxy_connect_timeout 60s;
     proxy_socket_keepalive on;
-    proxy_pass localhost:<%= $port %>;
+    # 127.0.0.1, not localhost: on the host, localhost also resolves to ::1, where
+    # wslrelay mirrors published ports and accepts connections it never serves
+    proxy_pass 127.0.0.1:<%= $port %>;
 }
