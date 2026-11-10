@@ -120,10 +120,27 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $config = ($configJson -join "`n") | ConvertFrom-Json
-          $mappings = @($config.services.PSObject.Properties.Value | ForEach-Object { $_.volumes })
+          $declaredVolumes = @{}
+          if ($config.volumes) {
+            foreach ($property in $config.volumes.PSObject.Properties) { $declaredVolumes[$property.Name] = $property.Value }
+          }
+          # Without interpolation, a bind source starting with a variable (e.g. ${NGINX_HOME}/logs)
+          # is reported as a named volume; resolve it from the runner environment instead
+          $mappings = @($config.services.PSObject.Properties.Value | ForEach-Object { $_.volumes } | ForEach-Object {
+            $source = $_.source
+            if ($_.type -ne 'volume' -or -not $source -or $declaredVolumes.ContainsKey($source) -or $source -notmatch '\$') { return $_ }
+            $resolved = [regex]::Replace($source, '\$\{(\w+)\}|\$(\w+)', {
+              param($match)
+              $name = if ($match.Groups[1].Success) { $match.Groups[1].Value } else { $match.Groups[2].Value }
+              $value = [Environment]::GetEnvironmentVariable($name)
+              if (-not $value) { throw "Cannot resolve mount source '$source': $name is not set on the runner" }
+              $value
+            })
+            [pscustomobject]@{ type = 'bind'; source = $resolved }
+          })
           $volumes = $mappings | Where-Object { $_.type -eq 'volume' -and $_.source } |
             Select-Object -ExpandProperty source -Unique | Where-Object {
-              $config.volumes.PSObject.Properties[$_].Value.driver -ne 'fentas/davfs'
+              $declaredVolumes[$_].driver -ne 'fentas/davfs'
           }
           $mounts = $mappings | Where-Object { $_.type -eq 'bind' -and $_.source } |
             Select-Object -ExpandProperty source -Unique
